@@ -30,6 +30,9 @@ export async function run(): Promise<void> {
   try {
     await configuration.update('iconTheme', process.env.TELESCOPE_TEST_ICON_THEME ?? 'picker-test-icons', vscode.ConfigurationTarget.Global);
     await checkPicker();
+    const commands = await vscode.commands.getCommands(true);
+    assert.ok(commands.includes('telescopePicker.configureShortcuts'), 'Shortcut configuration command is registered');
+    await vscode.commands.executeCommand('telescopePicker.configureShortcuts');
   } finally {
     await configuration.update('iconTheme', previous, vscode.ConfigurationTarget.Global);
   }

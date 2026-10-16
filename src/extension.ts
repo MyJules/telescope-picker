@@ -5,6 +5,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel('Telescope Picker');
   const controller = new PickerController(context, output);
   context.subscriptions.push(output, controller,
+    vscode.commands.registerCommand('telescopePicker.configureShortcuts', () =>
+      vscode.commands.executeCommand('workbench.action.openGlobalKeybindings', '@ext:local.telescope-picker')),
     vscode.commands.registerCommand('telescopePicker.files', () => controller.show()),
     vscode.commands.registerCommand('telescopePicker.searchContents', (query?: unknown) => {
       if (query !== undefined && typeof query !== 'string') throw new Error('Content-search query must be a string.');

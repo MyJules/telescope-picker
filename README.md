@@ -15,7 +15,8 @@ Requires desktop VS Code 1.108 or newer for native file-icon theme support.
 3. Open a folder or multi-root workspace.
 4. Press **Ctrl+Alt+P** (**Cmd+Alt+P** on macOS), or run
    **Telescope Picker: Find Files**.
-5. To search **inside files**, run **Telescope Picker: Search File Contents**,
+5. To search **inside files**, press **Ctrl+Alt+F** (**Cmd+Alt+F** on macOS),
+   run **Telescope Picker: Search File Contents**,
    or use the popup's search icon to switch modes. The files icon switches back.
 
 The native popup keeps input focus while the selected file appears in the
@@ -31,6 +32,34 @@ support, encoding, and unsaved document contents apply.
 | Per-result split icon | Open that file beside |
 | Escape | Close the popup, remove temporary previews, and restore the original file, selections, visible range, and editor focus |
 | Ctrl+J / Ctrl+K | Navigate if `telescopePicker.vimNavigation` is enabled |
+
+### Configure your shortcuts
+
+Run **Telescope Picker: Configure Keyboard Shortcuts** to open VS Code's shortcut
+editor filtered to this extension. Change **Find Files** and **Search File Contents**
+to your preferred keys; use **Change Keybinding** or **Remove Keybinding** to
+replace or disable a default. These are overridable defaults, not runtime-hardcoded
+keys. Changes take effect immediately without rebuilding or reloading.
+
+For text configuration, run **Preferences: Open Keyboard Shortcuts (JSON)**.
+Add entries to the existing array in your user `keybindings.json`, for example:
+
+```jsonc
+[
+  { "key": "ctrl+alt+p", "command": "-telescopePicker.files", "when": "!terminalFocus" },
+  { "key": "ctrl+alt+f", "command": "-telescopePicker.searchContents", "when": "!terminalFocus" },
+  { "key": "ctrl+shift+o", "command": "telescopePicker.files", "when": "!terminalFocus" },
+  { "key": "ctrl+shift+g", "command": "telescopePicker.searchContents", "when": "!terminalFocus" }
+]
+```
+
+The example keys may override other VS Code commands; choose unused keys or
+inspect conflicts in the shortcut editor. On macOS, remove the `cmd+alt+p` and
+`cmd+alt+f` defaults instead, and use `cmd` in your custom bindings if preferred.
+Use `keybindings.json`, not `settings.json`, for key strings: VS Code's stable
+extension API does not dynamically register arbitrary shortcuts from settings.
+This also preserves native support for chords, `when` clauses, conflict
+resolution, profiles, and Settings Sync.
 
 The original document is never edited, saved, or reverted by the extension.
 Dirty documents, existing tabs, and displaced background previews are preserved.
