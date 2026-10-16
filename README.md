@@ -70,7 +70,9 @@ parsed, icons/fonts copied, or theme settings changed by the extension.
 
 Content matches are grouped by file URI under **non-selectable file headings**
 showing the relative path, workspace root, and visible match count.
-Matching rows show the active theme's file icon, line number, and code excerpt.
+Matching rows show the active theme's file icon and code excerpt, with
+`relative/path:line · workspace root` beside each match, so its source remains
+visible even when the file heading has scrolled out of view.
 Arrow keys and optional
 Ctrl+J/K navigation skip headings; Enter, split, Escape, and resume still act on
 matching lines. The 200-result cap counts matches, not file headings.

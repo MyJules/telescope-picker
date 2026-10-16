@@ -156,7 +156,7 @@ export class PickerController implements vscode.Disposable {
             id: match.id, uri: match.uri, path: match.path, location: match.location,
             resourceUri: vscode.Uri.parse(match.uri), iconPath: vscode.ThemeIcon.File,
             label: literalLabel(`${start ? '...' : ''}${excerpt || '(whitespace)'}${start + 400 < text.length ? '...' : ''}`),
-            description: `Line ${match.location.line + 1}`,
+            description: `${literalLabel(match.path)}:${match.location.line + 1} · ${literalLabel(match.root)}`,
             alwaysShow: true, buttons: [splitButton]
           });
         }

@@ -189,7 +189,7 @@ it('searches lines, preserves code-editor previews, and opens a match at its rea
     kind: vscode.QuickPickItemKind.Separator,
     label: 'src/main.cpp · workspace (1)'
   });
-  expect(contentItems()[0]?.description).toBe('Line 2');
+  expect(contentItems()[0]?.description).toBe('src/main.cpp:2 · workspace');
   expect(picker.activeItems[0]?.id).toBe(contentItems()[0]?.id);
   await vi.waitFor(() => expect(window.activeTextEditor?.selection.start.line).toBe(1));
   picker.accept();
@@ -280,7 +280,9 @@ it('groups repeated file matches and skips headings during navigation and accept
     await vi.waitFor(() => expect(contentItems()).toHaveLength(3));
     expect(picker.items.filter(item => item.kind === vscode.QuickPickItemKind.Separator)).toHaveLength(2);
     expect(picker.items[0]?.label).toContain('src/main.cpp · workspace (2)');
-    expect(contentItems().map(item => item.description)).toEqual(['Line 2', 'Line 3', 'Line 1']);
+    expect(contentItems().map(item => item.description)).toEqual([
+      'src/main.cpp:2 · workspace', 'src/main.cpp:3 · workspace', 'src/other.cpp:1 · workspace'
+    ]);
     const first = picker.activeItems[0];
     controller.navigate(1);
     expect(picker.activeItems[0]?.id).toBe(contentItems()[1]?.id);
@@ -389,6 +391,8 @@ it('groups repeated file matches and skips headings during navigation and accept
     expect(picker.title).toContain('205 matching lines (showing 200)');
     expect(picker.items[0]?.label).toContain('main.cpp · root0');
     expect(picker.items[2]?.label).toContain('main.cpp · root1');
+    expect(contentItems()[0]?.description).toBe('main.cpp:1 · root0');
+    expect(contentItems()[1]?.description).toBe('main.cpp:1 · root1');
   });
 
   it('does not interpret icon syntax inside file paths, root names or matching code', async () => {
@@ -406,4 +410,5 @@ it('groups repeated file matches and skips headings during navigation and accept
     await vi.waitFor(() => expect(contentItems()).toHaveLength(1));
     expect(picker.items[0]?.label).toBe('\\$(warning).cpp · \\$(error) (1)');
     expect(contentItems()[0]?.label).toContain('\\$(warning)');
+    expect(contentItems()[0]?.description).toBe('\\$(warning).cpp:1 · \\$(error)');
   });
