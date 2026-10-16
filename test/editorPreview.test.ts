@@ -30,7 +30,7 @@ it('debounces navigation and previews only the latest selection with focus prese
   expect(window.activeTextEditor?.document.uri.toString()).toBe(target);
   expect(window.showTextDocument.mock.calls[0]?.[1]).toEqual({ viewColumn: 1, preserveFocus: true, preview: true });
 });
-it('reveals fuzzy content matches and removes theme-based highlights when the query changes', async () => {
+it('reveals content matches and removes theme-based highlights when the query changes', async () => {
   const document = createDocument(vscode.Uri.parse(target), true, '// heading\nconst fuzzyNeedle = 1;');
   workspace.textDocuments.push(document);
   const location = { line: 1, text: document.lineAt(1).text, matches: [6, 8, 11] };

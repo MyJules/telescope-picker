@@ -17,5 +17,4 @@ export interface ContentMatch {
   path: string;
   root: string;
   location: MatchLocation;
-  score: number;
 }

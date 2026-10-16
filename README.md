@@ -1,6 +1,7 @@
 # Telescope Picker
 
-A standalone desktop VS Code extension with a **native fuzzy file and content-search popup**.
+A standalone desktop VS Code extension with a **native popup for fuzzy filenames
+and fast text search**.
 Selecting a result previews the file **where your code is already open**, in
 the original editor group. There is no bottom preview panel or picker webview.
 
@@ -8,7 +9,7 @@ the original editor group. There is no bottom preview panel or picker webview.
 
 Requires desktop VS Code 1.95 or newer.
 
-1. Install the platform-matching VSIX (for example `telescope-picker-win32-x64-0.4.0.vsix`)
+1. Install the platform-matching VSIX (for example `telescope-picker-win32-x64-0.5.0.vsix`)
    using **Extensions: Install from VSIX**.
 2. Run **Developer: Reload Window** when updating an already-running version.
 3. Open a folder or multi-root workspace.
@@ -23,7 +24,7 @@ support, encoding, and unsaved document contents apply.
 
 | Key / action | Behavior |
 | --- | --- |
-| Type | Fuzzy-match filenames/paths, or individual code lines in content mode |
+| Type | Fuzzy-match filenames/paths, or search literal text in content mode |
 | Up / Down | Select and preview files in the original editor group |
 | Enter | Keep the selected file open as a normal, non-preview tab |
 | Ctrl+Enter (Windows/Linux), Cmd+Enter (macOS) | Restore the original file on the left and open the selection beside |
@@ -49,51 +50,62 @@ returns focus to the editor group. Other existing editor tabs are not closed.
 **Telescope Picker: Resume Picker** restores the last mode, query, and selected file/line.
 State is saved per workspace on close or acceptance. Opening an already-open
 picker reuses it. Native Quick Pick supplies accessibility, matching highlights,
-themes, fonts, and final result ordering. The extension pre-ranks up to 200
-candidates with fuzzysort. Remap shortcuts if another extension conflicts.
+themes, fonts, and final result ordering. Fuzzysort pre-ranks filename results;
+text results are ordered by path and line, with up to 200 candidates displayed.
+Remap shortcuts if another extension conflicts.
 
-## Fuzzy search inside files
+## Fast text search inside files
 
-Content search matches subsequences on **individual lines**, not just filenames:
-`fzndl` can find `const fuzzyNeedle = 1;`. Results show a code excerpt plus
+Starting in **0.5.0**, content search uses **literal, case-insensitive text**
+instead of fuzzy subsequences. For example, `fuzzyNeedle` finds `FUZZYNEEDLE`,
+but `fzndl` does not. Filename search remains fuzzy. Results show a code excerpt plus
 `path:line` and workspace root. Selection reveals the matching line in the
 current editor and highlights its matched characters using theme colors.
 Enter and opening beside both navigate to that exact line. Highlights are
 removed when changing selection/query or closing/accepting the picker.
 
-- Type a nonempty query to begin. Queries are debounced by 180 ms; obsolete
+- Type a nonempty query to begin. Queries are debounced by 80 ms; obsolete
   searches and their packaged backend processes are cancelled.
-- Every discovered eligible file is scanned: there is **no total content-byte,
-  line-count, or content-discovery file-count cap**. Only the best 200 matching
-  lines are retained/rendered, with the full match count and progress in the title.
-  Large workspaces may take longer; filename-query performance targets do not
-  apply to this full-workspace scan.
-- Open documents use their live, decoded contents, including unsaved changes.
-  Unopened filesystem files stream through **explicitly packaged ripgrep**,
-  then fuzzysort ranks lines. This does not invoke VS Code's bundled executable,
+- The query is passed directly to **explicitly packaged ripgrep**, which searches
+  workspace directories and streams **only matching lines**, rather than sending
+  every line to the extension host. No `workspace.findFiles` discovery is needed
+  before text search. There is no total content-byte/line/file cap; the popup
+  retains the first 200 lines in path/line order and displays the full matching-line
+  count. Very broad queries can still take longer.
+- Dirty documents use their live, decoded contents instead of stale disk matches.
+  Their ignore-file eligibility is cached and refreshed on filesystem/settings
+  changes. This does not invoke VS Code's bundled executable,
   private APIs, shell commands, workspace code, or an external service. The
   supported VS Code 1.95 typings provide no stable streaming text-search API.
-- Discovery has the same `files.exclude` behavior described below. Ripgrep
-  configuration and extra ignore rules are disabled for the explicit discovered
-  paths, so `.gitignore` and `search.exclude` do not silently change eligibility.
-- Binary and invalid UTF-8 files are skipped, with counts in the title and
-  encoding details in **Output: Telescope Picker**. BOM-detected UTF-16 is decoded
-  by ripgrep; other encodings can be searched by first opening the document with
-  the correct VS Code encoding. Unopened non-filesystem URI resources are
-  explicitly reported as unsupported; open text documents can still be searched.
+- Like native search, content mode respects `files.exclude`, `search.exclude`,
+  `.gitignore`, and `.ignore`, including sibling-dependent `when` exclusions.
+  `search.exclude` overrides matching `files.exclude` entries. It also honors
+  `search.useIgnoreFiles`, `search.useGlobalIgnoreFiles`,
+  `search.useParentIgnoreFiles`, and `search.followSymlinks`. Hidden files are
+  eligible unless excluded/ignored. Ripgrep configuration files are disabled.
+  **This is intentionally different from filename discovery**, described below.
+- Binary files are skipped by ripgrep. Reported binary/unsupported-encoding
+  matches are discarded; reported counts are shown in the title and encoding
+  details in **Output: Telescope Picker**, not an exhaustive count of ignored files.
+  UTF-8 and BOM-detected UTF-16 are supported. Dirty text already decoded by VS
+  Code can use other encodings. Unopened non-filesystem URI resources are
+  explicitly reported as unsupported; their open text documents can still be searched.
 - File/document changes refresh the active content query. A result whose line
   changed before preview/open is rejected with an explicit refresh error rather
   than navigating to stale coordinates. Read/discovery/backend failures show an
   error instead of claiming a complete scan.
 - The existing **1 MiB automatic preview limit** still applies to unopened files,
   not content scanning. Press Enter to explicitly open larger matches.
-- This is not regex, exact-text, or multiline search. Use VS Code's Find in Files
-  for those workflows. The command also accepts an optional initial query string
+- Regex punctuation and spaces are literal; every occurrence on a matching line
+  is highlighted. Multiline/NUL queries are rejected explicitly. This popup does
+  not implement regex, replace, whole-word, or case-sensitive controls; use VS
+  Code's Find in Files for those workflows.
+  The command also accepts an optional initial query string
   when invoked programmatically.
 
 ## Discovery and preview behavior
 
-- Discovery uses public `workspace.findFiles` APIs for each workspace root.
+- **Filename discovery** uses public `workspace.findFiles` APIs for each workspace root.
   **`files.exclude` applies; `search.exclude`, `.gitignore`, and `.ignore` are
   not additionally applied.** Add build/dependency directories to `files.exclude`
   if they should not appear.
@@ -153,15 +165,18 @@ repository before Marketplace publication.
 Unit tests cover relevance, discovery/cache, request generations, the native
 popup, editor-preview cancellation/races, dirty documents, pinned/existing tabs,
 preview-disabled settings, restoration, acceptance, and splitting. Content tests
-exercise the actual packaged backend, cancellation, uncapped scans beyond 32 MiB
-and 100,000 lines, binary/encoding handling, live text, relevance, progress,
+exercise the actual packaged backend, cancellation, literal/Unicode matching,
+uncapped searches beyond 32 MiB and 100,000 lines, binary/encoding handling,
+ignore/exclude/sibling rules, overlapping roots, live text, progress,
 invalidation, mode switching, resume, match highlights, and exact-line opening.
 Extension-host tests run on VS Code **1.95.3** against an isolated two-root
 workspace and exercise actual preview switching, dirty contents, original
 selections/scroll restoration, temporary-tab cleanup, Enter pinning, resume,
-opening beside, fuzzy on-disk/unsaved content search, and exact matching-line
+opening beside, literal on-disk/unsaved text search, and exact matching-line
 acceptance. Set `VSCODE_TEST_VERSION` or `VSCODE_EXECUTABLE_PATH` to
 test another desktop build.
+Set `TELESCOPE_TEST_EXTENSION_PATH` to an installed extension directory to test
+the packaged runtime rather than the development bundle.
 
 If npm 10.9.2 crashes resolving Vitest optional peers with an `edgesOut` error,
 use `npx --yes npm@11 ci` instead of upgrading global npm.
@@ -174,6 +189,13 @@ Node 22.16.0, the v0.2 baseline was approximately **18 ms p50 / 29 ms p95**.
 It verifies the 200-result limit and fails above 50 ms ranking p95.
 Immutable fuzzysort snapshots avoid per-candidate custom scoring costs.
 
+The literal-content regression test uses a 34 MiB UTF-8 file, over 100,000
+nonmatching lines and 205 matching lines. On the same Windows x64 machine,
+five complete provider searches took **76, 47, 47, 51, and 47 ms**, including
+process startup and result processing. The test enforces a 500 ms ceiling per
+run on this fixture. These are sparse-query measurements, not a guarantee for
+every workspace, and exclude input debounce, popup rendering and preview loading.
+
 These figures exclude native popup rendering, IPC, discovery, document loading,
 and editor activation. Opening within 150 ms and end-to-end visible updates
 within 50 ms remain acceptance targets, not verified promises.
@@ -184,9 +206,10 @@ within 50 ms remain acceptance targets, not verified promises.
 - `src/editorPreview.ts`: serialized native previews, tab ownership and restoration.
 - `src/files.ts`: URI discovery and cache invalidation.
 - `src/contents.ts`: streaming content search, live documents, progress and cancellation.
+- `src/searchScope.ts`: native-style ignore/exclude settings and sibling rules.
 - `src/ranking.ts`: maintained matcher and candidate limits.
 - `src/latest.ts` / `src/types.ts`: request generations and result shapes.
 
-Regex/literal grep, open-editor/recent-file providers, symbols, Git operations,
-and plugins are not implemented. Content search is per-line fuzzy matching, not
-a replacement for VS Code's Find in Files.
+Regex/replace, open-editor/recent-file providers, symbols, Git operations,
+and plugins are not implemented. Literal text search keeps the popup/preview
+workflow; it is not a full replacement for VS Code's Find in Files.

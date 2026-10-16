@@ -4,6 +4,7 @@ scripts/**
 .vscode/**
 .vscode-test/**
 node_modules/fuzzysort/**
+node_modules/picomatch/**
 tsconfig.json
 esbuild.mjs
 vitest.config.mts

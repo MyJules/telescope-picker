@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { posix } from 'node:path';
 import type {
   Position as VscodePosition, Range as VscodeRange, QuickInputButton, QuickPickItem, Tab, TabGroup, TextDocument, TextDocumentShowOptions, TextLine,
   TextEditor, Uri as VscodeUri, ViewColumn as VscodeColumn
@@ -16,6 +17,10 @@ export class EventEmitter<T> {
 }
 
 export class CancellationError extends Error {}
+export class FileSystemError extends Error {
+  constructor(readonly code: string) { super(code); }
+  static FileNotFound(): FileSystemError { return new FileSystemError('FileNotFound'); }
+}
 export class CancellationTokenSource {
   private readonly cancelled = new EventEmitter<void>();
   readonly token = { isCancellationRequested: false, onCancellationRequested: this.cancelled.event };
@@ -26,8 +31,12 @@ export class Uri {
   constructor(private readonly value: string) {}
   static parse(value: string): Uri { return new Uri(value); }
   static file(value: string): Uri { return new Uri(pathToFileURL(value).href); }
-  static joinPath(base: Uri, ...parts: string[]): Uri { return new Uri(`${base.toString()}/${parts.join('/')}`); }
-  get path(): string { return new URL(this.value).pathname; }
+  static joinPath(base: Uri, ...parts: string[]): Uri {
+    const url = new URL(base.toString());
+    url.pathname = posix.join(url.pathname, ...parts);
+    return new Uri(url.href);
+  }
+  get path(): string { return decodeURIComponent(new URL(this.value).pathname); }
   get scheme(): string { return new URL(this.value).protocol.slice(0, -1); }
   get fsPath(): string { return fileURLToPath(this.value); }
   toString(): string { return this.value; }
@@ -96,6 +105,7 @@ export const fileDeleted = new EventEmitter<void>();
 export const foldersChanged = new EventEmitter<void>();
 export const configurationChanged = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
 export const tabsChanged = new EventEmitter<void>();
+export const settings = new Map<string, unknown>();
 export const workspace = {
   workspaceFolders: [{ uri: Uri.parse('file:///workspace'), name: 'workspace', index: 0 }],
   textDocuments: [] as TextDocument[],
@@ -114,16 +124,23 @@ export const workspace = {
   onDidChangeTextDocument: documentChanged.event,
   findFiles: vi.fn(async (_include: unknown, _exclude?: unknown, _max?: number, _token?: unknown) =>
     [Uri.parse('file:///workspace/src/main.cpp')]),
-  asRelativePath: (uri: Uri): string => {
+  asRelativePath: (uri: Pick<VscodeUri, 'path' | 'toString'>): string => {
     const folder = workspace.getWorkspaceFolder(uri);
     return folder ? uri.path.slice(folder.uri.path.length + 1) : uri.path;
   },
-  getWorkspaceFolder: (uri: Uri) => workspace.workspaceFolders
+  getWorkspaceFolder: (uri: Pick<VscodeUri, 'path' | 'toString'>) => workspace.workspaceFolders
     .filter(folder => uri.toString().startsWith(`${folder.uri.toString()}/`))
     .sort((a, b) => b.uri.toString().length - a.uri.toString().length)[0],
-  getConfiguration: () => ({ get: () => false }),
+  getConfiguration: (section?: string, uri?: VscodeUri) => ({
+    get: <T>(key: string, fallback?: T): T | undefined => {
+      const name = `${section}.${key}`;
+      const scoped = `${uri?.toString()}|${name}`;
+      return settings.has(scoped) ? settings.get(scoped) as T
+        : settings.has(name) ? settings.get(name) as T : fallback;
+    }
+  }),
   fs: {
-    stat: vi.fn(async () => ({ size: 20 })),
+    stat: vi.fn(async (_uri: VscodeUri) => ({ size: 20 })),
     readFile: vi.fn<() => Promise<Uint8Array>>(async () => new TextEncoder().encode('int main() { return 0; }'))
   }
 };
@@ -263,4 +280,5 @@ export function resetEditors(): void {
   window.tabGroups.all = [new MockGroup(1)];
   workspace.textDocuments = [];
   editorSettings.previewEnabled = true;
+  settings.clear();
 }

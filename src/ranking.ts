@@ -11,19 +11,26 @@ export interface IndexedFile {
 export const RESULT_LIMIT = 200;
 const snapshots = new WeakMap<readonly IndexedFile[], SnapshotKeys<IndexedFile>>();
 
-export function matchContentLine(file: IndexedFile, query: string, line: number, text: string): ContentMatch | undefined {
-  // Explicit preparation avoids the matcher's unbounded string-target cache during streaming scans.
-  const match = fuzzysort.single(query, fuzzysort.prepare(text));
-  if (!match) return undefined;
-  return {
-    id: JSON.stringify([file.id, line]), uri: file.id, path: file.path, root: file.root,
-    location: { line, text, matches: [...match.indexes] }, score: match.score
+export function createContentMatcher(query: string): (file: IndexedFile, line: number, text: string) => ContentMatch | undefined {
+  if (!query.length || /[\r\n\0]/.test(query)) throw new Error('Enter a nonempty, single-line text query without NUL characters.');
+  const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu');
+  return (file, line, text) => {
+    const matches: number[] = [];
+    pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text)) !== null)
+      for (let index = match.index; index < match.index + match[0].length; index++) matches.push(index);
+    if (!matches.length) return undefined;
+    return {
+      id: JSON.stringify([file.id, line]), uri: file.id, path: file.path, root: file.root,
+      location: { line, text, matches }
+    };
   };
 }
 
 export function retainContentMatch(items: ContentMatch[], match: ContentMatch): void {
   const compare = (a: ContentMatch, b: ContentMatch): number =>
-    b.score - a.score || a.path.localeCompare(b.path) || a.uri.localeCompare(b.uri) || a.location.line - b.location.line;
+    a.path.localeCompare(b.path) || a.uri.localeCompare(b.uri) || a.location.line - b.location.line;
   const last = items.at(-1);
   if (items.length === RESULT_LIMIT && last && compare(match, last) >= 0) return;
   let low = 0;

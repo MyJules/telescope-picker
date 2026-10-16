@@ -118,10 +118,10 @@ export async function run(): Promise<void> {
       assertNoPickerTabs();
 
       await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false });
-      await vscode.commands.executeCommand('telescopePicker.searchContents', 'unsvprvwfxtr137');
+      await vscode.commands.executeCommand('telescopePicker.searchContents', 'UNSAVED preview fixture 137');
       await until(() => editorAt(vscode.ViewColumn.One)?.document === document
         && editorAt(vscode.ViewColumn.One)?.selection.start.line === 137,
-      'Content search previews a fuzzy subsequence match in unsaved text at the matching line');
+      'Text search previews a case-insensitive literal match in unsaved text at the matching line');
       assert.equal(document.getText(), unsavedText, 'Content previews do not alter dirty contents');
       await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
       await until(() => vscode.window.activeTextEditor?.document === document
@@ -139,10 +139,10 @@ export async function run(): Promise<void> {
       assert.ok(editorAt(vscode.ViewColumn.One)?.selections.every((selection, i) => selection.isEqual(selections[i]!)));
 
       await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false });
-      await vscode.commands.executeCommand('telescopePicker.searchContents', 'dskcntndl93');
+      await vscode.commands.executeCommand('telescopePicker.searchContents', 'diskContentNeedle');
       await until(() => editorAt(vscode.ViewColumn.One)?.document.uri.toString() === diskContent.id
         && editorAt(vscode.ViewColumn.One)?.selection.start.line === 0,
-      'Packaged backend finds a fuzzy match in on-disk workspace contents');
+      'Packaged backend finds an exact text match in on-disk workspace contents');
       await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
       await until(() => vscode.window.activeTextEditor?.document.uri.toString() === diskContent.id
         && activeTab(vscode.ViewColumn.One)?.isPreview === false
@@ -167,6 +167,6 @@ export async function run(): Promise<void> {
       assert.ok(await vscode.workspace.applyEdit(restore));
       await vscode.commands.executeCommand('workbench.action.files.revert');
     }
-    console.log('Extension-host checks passed: native popup, multi-root/exclusions, current-editor preview, dirty contents, cancel/selection/scroll restoration, background/unpinned preview restoration, temporary-tab cleanup, resume, Enter pinning, split, streaming fuzzy content search, dirty-text matching and exact-line acceptance.');
+    console.log('Extension-host checks passed: native popup, multi-root/exclusions, current-editor preview, dirty contents, cancel/selection/scroll restoration, background/unpinned preview restoration, temporary-tab cleanup, resume, Enter pinning, split, query-specific text search, dirty-text matching and exact-line acceptance.');
   } finally { provider.dispose(); }
 }

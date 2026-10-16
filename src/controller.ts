@@ -72,7 +72,7 @@ export class PickerController implements vscode.Disposable {
     picker.title = 'Telescope Picker';
     const modeLabel = (): string => state.mode === 'files' ? 'Files' : 'File Contents';
     const configure = (): void => {
-      picker.placeholder = `Fuzzy ${state.mode === 'files' ? 'file names' : 'text within files'} · Enter Open · Ctrl/Cmd+Enter Split · Esc Close`;
+      picker.placeholder = `${state.mode === 'files' ? 'Fuzzy file names' : 'Search text within files (ignore case)'} · Enter Open · Ctrl/Cmd+Enter Split · Esc Close`;
       picker.buttons = [{
         iconPath: new vscode.ThemeIcon(state.mode === 'files' ? 'search' : 'files'),
         tooltip: state.mode === 'files' ? 'Search file contents' : 'Find files'
@@ -140,9 +140,9 @@ export class PickerController implements vscode.Disposable {
       });
       title(`Telescope Picker · File Contents · ${result.total} matching lines`
         + (result.total > items.length ? ` (showing ${items.length})` : '')
-        + (result.complete ? ` · ${result.scanned} files checked` : ` · Scanning ${result.scanned}/${result.files} files`)
+        + (result.complete ? ' · Search complete' : ` · Searching roots ${result.searchedRoots}/${result.roots}`)
         + (result.binary ? ` · ${result.binary} binary files skipped` : '')
-        + (result.unsupported ? ` · ${result.unsupported} unsupported files skipped (see Output)` : ''));
+        + (result.unsupported ? ` · ${result.unsupported} unsupported resources skipped (see Output)` : ''));
       display(items, result.complete ? 'No matching text.' : 'Scanning workspace file contents...');
     };
     const search = async (query: string): Promise<void> => {
@@ -161,8 +161,8 @@ export class PickerController implements vscode.Disposable {
         if (query.length > 1024) throw new Error('Queries are limited to 1,024 characters.');
         if (!vscode.workspace.workspaceFolders?.length) throw new Error('Open a folder or workspace to find files.');
         if (state.mode === 'contents') {
-          if (!query.trim()) {
-            status('Type text to fuzzy-search lines inside workspace files.');
+          if (!query.length) {
+            status('Type text to search inside workspace files.');
             return;
           }
           await this.contents.search(query, result => {
@@ -198,9 +198,9 @@ export class PickerController implements vscode.Disposable {
       previewedId = undefined;
       if (state.mode === 'files') { void search(query); return; }
       state.query = query;
-      status(query.trim() ? 'Waiting to search file contents...' : 'Type text to fuzzy-search lines inside workspace files.');
-      picker.busy = Boolean(query.trim());
-      debounce = setTimeout(() => { void search(query); }, 180);
+      status(query.length ? 'Searching file contents...' : 'Type text to search inside workspace files.');
+      picker.busy = Boolean(query.length);
+      debounce = setTimeout(() => { void search(query); }, 80);
     };
     const setMode = async (next: PickerMode): Promise<void> => {
       if (closed || opening || next === state.mode) return;

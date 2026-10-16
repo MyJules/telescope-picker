@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { PickerController } from '../src/controller';
 import { ContentProvider } from '../src/contents';
+import { createContentMatcher } from '../src/ranking';
 import { commands, createDocument, documentChanged, fileCreated, MockQuickPick, resetEditors, window, workspace, Uri } from './vscode';
 
 class State implements vscode.Memento {
@@ -33,11 +34,20 @@ beforeEach(async () => {
   original = await window.showTextDocument(document, { viewColumn: 1, preview: false });
   window.showTextDocument.mockClear();
   state = new State();
+  vi.spyOn(ContentProvider.prototype, 'search').mockImplementation(async (query, update) => {
+    const matchLine = createContentMatcher(query);
+    const items = workspace.textDocuments.flatMap(document =>
+      Array.from({ length: document.lineCount }, (_, line) => matchLine({
+        id: document.uri.toString(), path: workspace.asRelativePath(document.uri),
+        root: 'workspace', name: document.uri.path
+      }, line, document.lineAt(line).text)).filter(item => item !== undefined));
+    update({ items, total: items.length, searchedRoots: 1, roots: 1, binary: 0, unsupported: 0, complete: true });
+  });
   controller = new PickerController({ workspaceState: state }, { appendLine: log });
   await controller.show();
   picker = window.createQuickPick.mock.results.at(-1)?.value ?? new MockQuickPick();
 });
-afterEach(() => controller.dispose());
+afterEach(() => { controller.dispose(); vi.restoreAllMocks(); });
 
 it('uses a native popup without creating or focusing a preview panel', async () => {
   await controller.show();
@@ -134,7 +144,7 @@ it('switches the existing native popup between file names and contents without s
   await vi.waitFor(() => expect(picker.items[0]?.label).toContain('Type text'));
 });
 it('searches lines, preserves code-editor previews, and opens a match at its real line', async () => {
-  await contentMode('fzndl');
+  await contentMode('fuzzyNeedle');
   await vi.waitFor(() => expect(picker.items).toHaveLength(2));
   expect(picker.title).toContain('2 matching lines');
   expect(picker.items[0]?.description).toContain('src/main.cpp:2');
@@ -145,24 +155,24 @@ it('searches lines, preserves code-editor previews, and opens a match at its rea
   expect(window.activeTextEditor?.selection.start.line).toBe(1);
 });
 it('resumes content mode, query and selection across streaming updates', async () => {
-  await contentMode('fzndl');
+  await contentMode('fuzzyNeedle');
   await vi.waitFor(() => expect(picker.items).toHaveLength(2));
   controller.navigate(1);
   const selected = picker.activeItems[0]?.id;
   picker.hide();
   await controller.show(true);
   picker = window.createQuickPick.mock.results.at(-1)?.value ?? new MockQuickPick();
-  expect(picker.value).toBe('fzndl');
+  expect(picker.value).toBe('fuzzyNeedle');
   expect(picker.placeholder).toContain('within files');
   expect(picker.activeItems[0]?.id).toBe(selected);
-  expect(state.saved.at(-1)).toMatchObject({ mode: 'contents', query: 'fzndl', selectedId: selected });
+  expect(state.saved.at(-1)).toMatchObject({ mode: 'contents', query: 'fuzzyNeedle', selectedId: selected });
 });
 it('debounces content queries and refreshes edited documents without accepting stale rows', async () => {
   await contentMode('obsolete');
-  picker.value = 'fzndl';
+  picker.value = 'fuzzyNeedle';
   await vi.waitFor(() => expect(picker.items).toHaveLength(2));
   const stale = picker.items[0];
-  picker.value = 'othndl';
+  picker.value = 'otherNeedle';
   picker.activeItems = stale ? [stale] : [];
   await controller.openBeside();
   expect(window.activeTextEditor?.viewColumn).not.toBe(2);
@@ -175,23 +185,23 @@ it('debounces content queries and refreshes edited documents without accepting s
 it('shows explicit content-query limits and cancels a pending scan when the popup closes', async () => {
   await contentMode('x'.repeat(1025));
   await vi.waitFor(() => expect(picker.items[0]?.label).toContain('1,024'));
-  picker.value = 'fzndl';
+  picker.value = 'fuzzyNeedle';
   picker.hide();
   await new Promise(done => setTimeout(done, 220));
-  expect(state.saved.at(-1)).toMatchObject({ mode: 'contents', query: 'fzndl' });
+  expect(state.saved.at(-1)).toMatchObject({ mode: 'contents', query: 'fuzzyNeedle' });
   expect(window.activeTextEditor?.document).toBe(original.document);
 });
 it('keeps automatic-preview errors visible while content results continue streaming', async () => {
   const uri = 'file:///workspace/large.ts';
   const item = {
     id: JSON.stringify([uri, 0]), uri, path: 'large.ts', root: 'workspace',
-    location: { line: 0, text: 'needle', matches: [0, 1] }, score: 1
+    location: { line: 0, text: 'needle', matches: [0, 1] }
   };
   const spy = vi.spyOn(ContentProvider.prototype, 'search').mockImplementation(async (_query, update) => {
-    const result = { items: [item], total: 1, scanned: 1, files: 2, binary: 0, unsupported: 0, complete: false };
+    const result = { items: [item], total: 1, searchedRoots: 0, roots: 1, binary: 0, unsupported: 0, complete: false };
     update(result);
     await new Promise(done => setTimeout(done, 100));
-    update({ ...result, scanned: 2, complete: true });
+    update({ ...result, searchedRoots: 1, complete: true });
   });
   try {
     workspace.fs.stat.mockResolvedValue({ size: 2 * 1024 * 1024 });
@@ -199,6 +209,6 @@ it('keeps automatic-preview errors visible while content results continue stream
     picker.value = 'needle';
     await vi.waitFor(() => expect(picker.busy).toBe(false), { timeout: 2000 });
     expect(picker.title).toContain('1 MiB');
-    expect(picker.title).toContain('2 files checked');
+    expect(picker.title).toContain('Search complete');
   } finally { spy.mockRestore(); }
 });

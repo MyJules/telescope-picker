@@ -1,22 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { matchContentLine, rankFiles, retainContentMatch, RESULT_LIMIT, type IndexedFile } from '../src/ranking';
+import { createContentMatcher, rankFiles, retainContentMatch, RESULT_LIMIT, type IndexedFile } from '../src/ranking';
 import type { ContentMatch } from '../src/types';
 
 const file = (path: string, root = 'app'): IndexedFile => ({
   id: `${root}:${path}`, path, root, name: path.slice(path.lastIndexOf('/') + 1)
 });
 
-describe('streaming content relevance', () => {
-  it('finds fuzzy subsequences, rejects cross-line/nonmatches and reports UTF-16 character positions', () => {
-    const match = matchContentLine(file('main.ts'), 'fzndl', 8, '\u{1F600} const fuzzyNeedle = 1;');
+describe('literal content matching', () => {
+  it('matches contiguous text without case sensitivity and reports UTF-16 character positions', () => {
+    const match = createContentMatcher('FUZZY')(file('main.ts'), 8, '\u{1F600} const fuzzyNeedle = 1;');
     expect(match?.location.line).toBe(8);
-    expect(match?.location.matches.map(index => match.location.text[index]).join('').toLowerCase()).toBe('fzndl');
-    expect(matchContentLine(file('main.ts'), 'missing', 0, 'const value = 1;')).toBeUndefined();
+    expect(match?.location.matches).toEqual([9, 10, 11, 12, 13]);
+    expect(createContentMatcher('fzndl')(file('main.ts'), 0, 'const fuzzyNeedle = 1;')).toBeUndefined();
+  });
+  it('treats regex characters and whitespace literally and highlights every occurrence', () => {
+    const match = createContentMatcher(' [a].* ')(file('main.ts'), 0, ' [A].*  [a].* ');
+    expect(match?.location.matches).toHaveLength(14);
+    expect(createContentMatcher('  ')(file('main.ts'), 0, '  ')).toBeDefined();
+    expect(createContentMatcher('x.y')(file('main.ts'), 0, 'xay')).toBeUndefined();
   });
   it('retains the best 200, not merely the first 200 encountered', () => {
     const items: ContentMatch[] = [];
     for (let line = 300; line >= 0; line--) {
-      const match = matchContentLine(file('main.ts'), 'needle', line, 'needle');
+      const match = createContentMatcher('needle')(file('main.ts'), line, 'needle');
       if (match) retainContentMatch(items, match);
     }
     expect(items).toHaveLength(200);

@@ -1,8 +1,8 @@
 {
   "name": "telescope-picker",
   "displayName": "Telescope Picker",
-  "description": "Native fuzzy file and file-content search with live previews in the current code editor.",
-  "version": "0.4.0",
+  "description": "Fuzzy file picking and fast text search with live previews in the current code editor.",
+  "version": "0.5.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -21,7 +21,8 @@
       "supported": true
     },
     "virtualWorkspaces": {
-      "supported": true
+      "supported": "limited",
+      "description": "File picking supports virtual workspaces. Text search can search their open documents only."
     }
   },
   "contributes": {
@@ -119,10 +120,12 @@
   },
   "dependencies": {
     "@vscode/ripgrep": "^1.18.0",
-    "fuzzysort": "^4.0.2"
+    "fuzzysort": "^4.0.2",
+    "picomatch": "^4.0.7"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/picomatch": "^4.0.3",
     "@types/vscode": "1.95.0",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^4.0.0",
