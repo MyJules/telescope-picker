@@ -2,7 +2,7 @@
   "name": "telescope-picker",
   "displayName": "Telescope Picker",
   "description": "Fuzzy file picking and fast text search with live previews in the current code editor.",
-  "version": "0.8.8",
+  "version": "0.9.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -111,6 +111,26 @@
     "configuration": {
       "title": "Telescope Picker",
       "properties": {
+        "telescopePicker.include": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": [],
+          "scope": "resource",
+          "markdownDescription": "Folders or glob patterns to include in both Find Files and Search File Contents, relative to each workspace root. Empty means all eligible files. Examples: `src`, `include`, `**/*.cpp`. Existing VS Code ignore/exclude rules still apply."
+        },
+        "telescopePicker.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": [],
+          "scope": "resource",
+          "markdownDescription": "Folders or glob patterns to exclude from both Find Files and Search File Contents, relative to each workspace root. Examples: `out`, `**/generated/**`. Exclusions win over includes; existing VS Code exclusions are also respected."
+        },
         "telescopePicker.vimNavigation": {
           "type": "boolean",
           "default": false,

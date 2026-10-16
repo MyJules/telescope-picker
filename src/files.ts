@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { IndexedFile } from './ranking';
+import { searchFilters } from './searchFilters';
 
 const INDEX_LIMIT = 100_000;
 
@@ -18,7 +19,8 @@ export class FileProvider implements vscode.Disposable {
       watcher.onDidDelete(() => this.invalidate()),
       vscode.workspace.onDidChangeWorkspaceFolders(() => this.invalidate()),
       vscode.workspace.onDidChangeConfiguration(event => {
-        if (event.affectsConfiguration('files.exclude')) this.invalidate();
+        if (event.affectsConfiguration('files.exclude') || event.affectsConfiguration('telescopePicker.include')
+          || event.affectsConfiguration('telescopePicker.exclude')) this.invalidate();
       }));
   }
 
@@ -58,15 +60,21 @@ export class FileProvider implements vscode.Disposable {
 
   async discover(token: vscode.CancellationToken, maxPerRoot?: number): Promise<IndexedFile[]> {
     const folders = vscode.workspace.workspaceFolders ?? [];
+    const filters = new Map(folders.map(folder => [folder.uri.toString(), searchFilters(folder)]));
     const groups = await Promise.all(folders.map(async folder => {
+      const filter = filters.get(folder.uri.toString());
+      if (!filter) throw new Error('Workspace search filters are unavailable.');
+      const custom = filter.includes.length > 0 || filter.excludes.length > 0;
       const uris = await vscode.workspace.findFiles(
-        new vscode.RelativePattern(folder, '**/*'), undefined, maxPerRoot, token);
-      return uris.map(uri => {
+        new vscode.RelativePattern(folder, '**/*'), undefined, custom ? undefined : maxPerRoot, token);
+      return uris.flatMap(uri => {
         const owner = vscode.workspace.getWorkspaceFolder(uri) ?? folder;
+        const ownerFilter = filters.get(owner.uri.toString()) ?? filter;
+        if (!ownerFilter.allows(uri)) return [];
         const path = vscode.workspace.asRelativePath(uri, false).replaceAll('\\', '/');
         const duplicateName = folders.filter(candidate => candidate.name === owner.name).length > 1;
         const root = duplicateName ? `${owner.name} (${owner.uri.toString(true)})` : owner.name;
-        return { id: uri.toString(), path, root, name: path.slice(path.lastIndexOf('/') + 1) };
+        return [{ id: uri.toString(), path, root, name: path.slice(path.lastIndexOf('/') + 1) }];
       });
     }));
     if (token.isCancellationRequested) throw new vscode.CancellationError();

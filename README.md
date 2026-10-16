@@ -9,7 +9,7 @@ the original editor group. There is no bottom preview panel or picker webview.
 
 Requires desktop VS Code 1.108 or newer for native file-icon theme support.
 
-1. Install the platform-matching VSIX (for example `telescope-picker-win32-x64-0.8.0.vsix`)
+1. Install the platform-matching VSIX (for example `telescope-picker-win32-x64-0.9.0.vsix`)
    using **Extensions: Install from VSIX**.
 2. Run **Developer: Reload Window** when updating an already-running version.
 3. Open a folder or multi-root workspace.
@@ -60,6 +60,35 @@ Use `keybindings.json`, not `settings.json`, for key strings: VS Code's stable
 extension API does not dynamically register arbitrary shortcuts from settings.
 This also preserves native support for chords, `when` clauses, conflict
 resolution, profiles, and Settings Sync.
+
+### Include and exclude folders
+
+Configure **Telescope Picker: Include** and **Telescope Picker: Exclude** in VS Code
+Settings, or add this to your workspace settings:
+
+```jsonc
+{
+  "telescopePicker.include": ["src", "include"],
+  "telescopePicker.exclude": ["src/generated", "**/node_modules/**", "out"]
+}
+```
+
+Both settings apply to **Find Files and Search File Contents**, including dirty
+open documents, and refresh an open picker when changed. An empty include list
+means all eligible files; exclusions always win. Paths are relative to each
+workspace root. A folder includes/excludes its descendants; glob examples include
+`**/*.cpp`, `**/*.cppm`, and `**/generated/**`. Use forward slashes in globs
+(Windows backslashes in folder paths are also normalized). Absolute paths, parent
+traversal, empty entries and negated patterns are rejected with an explicit error.
+Use the exclude list rather than `!` patterns.
+
+Multi-root workspaces can override these resource-scoped settings per folder.
+These filters narrow existing discovery rules; they do not re-include files
+hidden by `files.exclude`, or by content search's ignore/exclusion settings.
+Content exclusions prune ripgrep traversal; includes are checked on results to
+avoid overriding ignore files. Filename discovery still respects `files.exclude`;
+custom filters are applied before the 100,000-file index limit, which can require
+enumerating more files when custom filters are enabled.
 
 The original document is never edited, saved, or reverted by the extension.
 Dirty documents, existing tabs, and displaced background previews are preserved.

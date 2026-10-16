@@ -1,6 +1,7 @@
 import { posix } from 'node:path';
 import picomatch from 'picomatch';
 import * as vscode from 'vscode';
+import { searchFilters, type SearchFilters } from './searchFilters';
 
 interface Exclusion { pattern: string; matches(path: string): boolean; when?: string }
 export interface SearchScope {
@@ -8,6 +9,7 @@ export interface SearchScope {
   label: string;
   args: string[];
   exclusions: readonly Exclusion[];
+  filters: SearchFilters;
 }
 
 function exclusions(folder: vscode.WorkspaceFolder): Exclusion[] {
@@ -36,6 +38,7 @@ export function searchScopes(): SearchScope[] {
   const folders = vscode.workspace.workspaceFolders ?? [];
   return folders.map(folder => {
     const rules = exclusions(folder);
+    const filters = searchFilters(folder);
     const config = vscode.workspace.getConfiguration('search', folder.uri);
     const args = ['--hidden', '--no-require-git'];
     if (process.platform === 'win32') args.push('--glob-case-insensitive');
@@ -44,15 +47,20 @@ export function searchScopes(): SearchScope[] {
     if (!config.get('useParentIgnoreFiles', false)) args.push('--no-ignore-parent');
     if (config.get('followSymlinks', true)) args.push('--follow');
     for (const rule of rules) if (!rule.when) args.push('--glob', `!${rule.pattern}`);
+    for (const pattern of filters.excludes) {
+      args.push('--glob', `!${pattern}`);
+      if (!pattern.endsWith('/**')) args.push('--glob', `!${pattern}/**`);
+    }
     const duplicate = folders.filter(candidate => candidate.name === folder.name).length > 1;
     return {
-      folder, args, exclusions: rules,
+      folder, args, exclusions: rules, filters,
       label: duplicate ? `${folder.name} (${folder.uri.toString(true)})` : folder.name
     };
   });
 }
 
 export async function excluded(uri: vscode.Uri, scope: SearchScope): Promise<boolean> {
+  if (!scope.filters.allows(uri)) return true;
   const path = posix.relative(scope.folder.uri.path, uri.path);
   const parts = path.split('/');
   for (const rule of scope.exclusions) {

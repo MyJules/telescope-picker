@@ -174,6 +174,31 @@ async function checkPicker(): Promise<void> {
         && vscode.window.activeTextEditor.selection.start.line === 0,
       'Content acceptance pins the selected file at the matching line');
 
+      const filters = vscode.workspace.getConfiguration('telescopePicker');
+      const originalInclude = filters.get<string[]>('include');
+      const originalExclude = filters.get<string[]>('exclude');
+      try {
+        await filters.update('include', ['z-content.ts'], vscode.ConfigurationTarget.Global);
+        await filters.update('exclude', [], vscode.ConfigurationTarget.Global);
+        const filteredFiles = await provider.getFiles();
+        assert.deepEqual(filteredFiles.files.map(file => file.path), ['z-content.ts'],
+          'Persistent include filters apply to real filename discovery');
+        await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false });
+        await vscode.commands.executeCommand('telescopePicker.searchContents', 'const');
+        await until(() => editorAt(vscode.ViewColumn.One)?.document.uri.toString() === diskContent.id,
+          'Persistent include filters apply to content search and skip dirty files outside the included folder');
+        await filters.update('include', ['sample.ts'], vscode.ConfigurationTarget.Global);
+        await until(() => editorAt(vscode.ViewColumn.One)?.document.uri.toString() !== diskContent.id,
+          'Changing persistent filters refreshes an open content picker');
+        await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+        await filters.update('exclude', ['sample.ts'], vscode.ConfigurationTarget.Global);
+        assert.equal((await provider.getFiles()).files.length, 0, 'Exclude filters win over include filters');
+      } finally {
+        await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+        await filters.update('include', originalInclude, vscode.ConfigurationTarget.Global);
+        await filters.update('exclude', originalExclude, vscode.ConfigurationTarget.Global);
+      }
+
       await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false });
       await vscode.commands.executeCommand('telescopePicker.searchContents', 'nativeOrderNeedle');
       const nativeFirst = indexed.files.find(file => file.path === 'zz-native-z.ts');

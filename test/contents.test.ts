@@ -157,6 +157,28 @@ it('honors files/search exclusions and ignore files for both disk and dirty matc
   ]));
 });
 
+it('applies persistent folder filters to disk and dirty matches without overriding ignore files', async () => {
+  await fixture('.gitignore', 'src/ignored.ts\n');
+  await fixture('src/visible.ts', 'needle');
+  await fixture('src/ignored.ts', 'needle');
+  const generated = await fixture('src/generated/file.ts', 'needle');
+  const dirty = await fixture('include/dirty.ts', 'diskOnly');
+  await fixture('tests/outside.ts', 'needle');
+  workspace.textDocuments.push(
+    createDocument(vscode.Uri.parse(generated.toString()), true, 'needle'),
+    createDocument(vscode.Uri.parse(dirty.toString()), true, 'needle')
+  );
+  settings.set('telescopePicker.include', ['src', 'include']);
+  settings.set('telescopePicker.exclude', ['**/generated']);
+  expect((await search('needle')).items.map(item => item.path)).toEqual(['include/dirty.ts', 'src/visible.ts']);
+  settings.set('telescopePicker.include', ['tests']);
+  configurationChanged.fire({ affectsConfiguration: key => key === 'telescopePicker.include' });
+  expect((await search('needle')).items.map(item => item.path)).toEqual(['tests/outside.ts']);
+  settings.set('telescopePicker.exclude', [null]);
+  configurationChanged.fire({ affectsConfiguration: key => key === 'telescopePicker.exclude' });
+  await expect(search('needle')).rejects.toThrow('telescopePicker.exclude');
+});
+
 it('applies sibling-dependent exclusions and surfaces unexpected sibling-read errors', async () => {
   await fixture('generated.ts', 'source');
   const generated = await fixture('generated.js', 'needle');
