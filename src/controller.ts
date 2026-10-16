@@ -4,13 +4,16 @@ import { LatestRequest } from './latest';
 import { EditorPreview } from './editorPreview';
 import { rankFiles } from './ranking';
 import { ContentProvider, type ContentUpdate } from './contents';
-import type { MatchLocation } from './types';
+import { fileIcon } from './fileIcons';
+import type { ContentMatch, MatchLocation } from './types';
 
 type PickerMode = 'files' | 'contents';
 interface ResumeState { query: string; selectedId?: string; mode: PickerMode }
 interface FileItem extends vscode.QuickPickItem { id?: string; uri?: string; path?: string; location?: MatchLocation }
 interface Session {
   picker: vscode.QuickPick<FileItem>;
+  state: ResumeState;
+  select(item: FileItem): void;
   accept(beside: boolean, item?: FileItem): Promise<void>;
   close(restoreFocus: boolean): void;
   setMode(mode: PickerMode): Promise<void>;
@@ -23,6 +26,8 @@ function savedState(value: unknown): ResumeState {
   const mode = 'mode' in value && value.mode === 'contents' ? 'contents' : 'files';
   return { query, selectedId, mode };
 }
+
+function literalLabel(text: string): string { return text.replace(/\$\(/g, '\\$('); }
 
 export class PickerController implements vscode.Disposable {
   private session: Session | undefined;
@@ -115,8 +120,8 @@ export class PickerController implements vscode.Disposable {
       visible = new Map(items.flatMap(item => item.id ? [[item.id, item] as const] : []));
       if (!items.length) status(empty);
       else {
-        const active = items.find(item => item.id === pendingSelection)
-          ?? items.find(item => item.id === state.selectedId) ?? items[0];
+        const active = items.find(item => item.id && item.id === pendingSelection)
+          ?? items.find(item => item.id && item.id === state.selectedId) ?? items.find(item => item.id);
         if (active?.id === pendingSelection) pendingSelection = undefined;
         applying = true;
         try {
@@ -127,19 +132,35 @@ export class PickerController implements vscode.Disposable {
       }
     };
     const contentResults = (result: ContentUpdate): void => {
-      const items: FileItem[] = result.items.map(match => {
-        const text = match.location.text;
-        const start = Math.max(0, (match.location.matches[0] ?? 0) - 40);
-        const excerpt = text.slice(start, start + 400).trim();
-        return {
-          id: match.id, uri: match.uri, path: match.path, location: match.location,
-          label: `${start ? '...' : ''}${excerpt}${start + 400 < text.length ? '...' : ''}`,
-          description: `${match.path}:${match.location.line + 1} · ${match.root}`,
-          alwaysShow: true, buttons: [splitButton]
-        };
-      });
+      const groups = new Map<string, ContentMatch[]>();
+      for (const match of result.items) {
+        const group = groups.get(match.uri);
+        if (group) group.push(match);
+        else groups.set(match.uri, [match]);
+      }
+      const items: FileItem[] = [];
+      for (const matches of groups.values()) {
+        const first = matches[0];
+        if (!first) continue;
+        const icon = fileIcon(first.path);
+        items.push({
+          kind: vscode.QuickPickItemKind.Separator,
+          label: `$(${icon.id}) ${literalLabel(first.path)} · ${literalLabel(first.root)} (${matches.length})`
+        });
+        for (const match of matches.sort((a, b) => a.location.line - b.location.line)) {
+          const text = match.location.text;
+          const start = Math.max(0, (match.location.matches[0] ?? 0) - 40);
+          const excerpt = text.slice(start, start + 400).trim();
+          items.push({
+            id: match.id, uri: match.uri, path: match.path, location: match.location,
+            label: literalLabel(`${start ? '...' : ''}${excerpt}${start + 400 < text.length ? '...' : ''}`),
+            description: `Line ${match.location.line + 1}`,
+            alwaysShow: true, buttons: [splitButton]
+          });
+        }
+      }
       title(`Telescope Picker · File Contents · ${result.total} matching lines`
-        + (result.total > items.length ? ` (showing ${items.length})` : '')
+        + (result.total > result.items.length ? ` (showing ${result.items.length})` : '')
         + (result.complete ? ' · Search complete' : ` · Searching roots ${result.searchedRoots}/${result.roots}`)
         + (result.binary ? ` · ${result.binary} binary files skipped` : '')
         + (result.unsupported ? ` · ${result.unsupported} unsupported resources skipped (see Output)` : ''));
@@ -174,8 +195,8 @@ export class PickerController implements vscode.Disposable {
         if (closed || !requests.isCurrent(generation)) return;
         const ranked = rankFiles(indexed.files, query);
         const items: FileItem[] = ranked.items.map(file => ({
-          id: file.id, uri: file.id, path: file.path, label: file.path, description: file.root,
-          iconPath: new vscode.ThemeIcon('file'), alwaysShow: true, buttons: [splitButton]
+          id: file.id, uri: file.id, path: file.path, label: literalLabel(file.path), description: literalLabel(file.root),
+          iconPath: fileIcon(file.path), alwaysShow: true, buttons: [splitButton]
         }));
         title(`Telescope Picker · ${ranked.total} results`
           + (ranked.truncated ? ` (showing ${items.length})` : '')
@@ -259,10 +280,12 @@ export class PickerController implements vscode.Disposable {
         }
       }
     };
-    const session: Session = { picker, accept, close, setMode };
+    const session: Session = { picker, state, select, accept, close, setMode };
     this.session = session;
     subscriptions.push(
-      picker.onDidChangeValue(schedule),
+      picker.onDidChangeValue(value => {
+        if (value !== state.query) schedule(value);
+      }),
       picker.onDidChangeActive(items => select(items[0])),
       picker.onDidAccept(() => { void accept(false); }),
       picker.onDidTriggerItemButton(event => { void accept(true, event.item); }),
@@ -289,13 +312,18 @@ export class PickerController implements vscode.Disposable {
 
   async openBeside(): Promise<void> { await this.session?.accept(true); }
 
-  navigate(direction: number): void {
-    const picker = this.session?.picker;
-    if (!picker) return;
+  navigate(direction: number): boolean {
+    const session = this.session;
+    if (!session) return false;
+    const picker = session.picker;
     const items = picker.items.filter(item => item.id);
-    const current = items.indexOf(picker.activeItems[0] ?? { label: '' });
+    const currentId = picker.activeItems[0]?.id ?? session.state.selectedId;
+    const current = items.findIndex(item => item.id === currentId);
     const next = items[Math.max(0, Math.min(items.length - 1, current + direction))];
-    if (next) picker.activeItems = [next];
+    if (!next || next.id === currentId) return false;
+    picker.activeItems = [next];
+    session.select(next);
+    return true;
   }
 
   dispose(): void {

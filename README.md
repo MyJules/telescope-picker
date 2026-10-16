@@ -9,7 +9,7 @@ the original editor group. There is no bottom preview panel or picker webview.
 
 Requires desktop VS Code 1.95 or newer.
 
-1. Install the platform-matching VSIX (for example `telescope-picker-win32-x64-0.5.0.vsix`)
+1. Install the platform-matching VSIX (for example `telescope-picker-win32-x64-0.6.0.vsix`)
    using **Extensions: Install from VSIX**.
 2. Run **Developer: Reload Window** when updating an already-running version.
 3. Open a folder or multi-root workspace.
@@ -54,12 +54,32 @@ themes, fonts, and final result ordering. Fuzzysort pre-ranks filename results;
 text results are ordered by path and line, with up to 200 candidates displayed.
 Remap shortcuts if another extension conflicts.
 
+## File icons and grouped results
+
+Filename results use bundled **Seti file-type icons** instead of one generic
+file icon. Associations include common languages/configuration filenames,
+CMake files, and C++ modules such as `.cppm` and `.ixx`. Unknown types use a
+generic document glyph.
+
+Content matches are grouped by file URI under **non-selectable file headings**
+showing the same type icon, relative path, workspace root, and visible match count.
+Matching rows show their line number and code excerpt. Arrow keys and optional
+Ctrl+J/K navigation skip headings; Enter, split, Escape, and resume still act on
+matching lines. The 200-result cap counts matches, not file headings.
+Identical paths in different workspace roots remain separate groups.
+
+The native Quick Pick API cannot automatically use Explorer's file-icon theme,
+and separators only support inline font icons. Seti glyphs are registered through
+VS Code's public icon contribution API, with theme-controlled foreground colors;
+they are intentionally consistent and monochrome rather than copies of the
+active Explorer icon theme. No custom DOM or unsupported UI services are used.
+
 ## Fast text search inside files
 
 Starting in **0.5.0**, content search uses **literal, case-insensitive text**
 instead of fuzzy subsequences. For example, `fuzzyNeedle` finds `FUZZYNEEDLE`,
-but `fzndl` does not. Filename search remains fuzzy. Results show a code excerpt plus
-`path:line` and workspace root. Selection reveals the matching line in the
+but `fzndl` does not. Filename search remains fuzzy. File headings show paths and
+workspace roots; matching rows show code excerpts and line numbers. Selection reveals the matching line in the
 current editor and highlights its matched characters using theme colors.
 Enter and opening beside both navigate to that exact line. Highlights are
 removed when changing selection/query or closing/accepting the picker.
@@ -169,10 +189,14 @@ exercise the actual packaged backend, cancellation, literal/Unicode matching,
 uncapped searches beyond 32 MiB and 100,000 lines, binary/encoding handling,
 ignore/exclude/sibling rules, overlapping roots, live text, progress,
 invalidation, mode switching, resume, match highlights, and exact-line opening.
+Icon/group tests check type associations, contributed glyphs/font packaging,
+heading isolation, multi-root groups, keyboard navigation, escaped labels, and
+match-count truncation independent of headings.
 Extension-host tests run on VS Code **1.95.3** against an isolated two-root
 workspace and exercise actual preview switching, dirty contents, original
 selections/scroll restoration, temporary-tab cleanup, Enter pinning, resume,
-opening beside, literal on-disk/unsaved text search, and exact matching-line
+opening beside, literal on-disk/unsaved text search, grouped navigation/resume,
+bundled font availability, and exact matching-line
 acceptance. Set `VSCODE_TEST_VERSION` or `VSCODE_EXECUTABLE_PATH` to
 test another desktop build.
 Set `TELESCOPE_TEST_EXTENSION_PATH` to an installed extension directory to test
@@ -180,6 +204,10 @@ the packaged runtime rather than the development bundle.
 
 If npm 10.9.2 crashes resolving Vitest optional peers with an `edgesOut` error,
 use `npx --yes npm@11 ci` instead of upgrading global npm.
+
+`npm run icons` regenerates the tracked Seti font, license, associations and
+`contributes.icons` entries after changing the `seti-ui` development dependency.
+Normal builds use the tracked assets and do not modify icon contributions.
 
 ### Performance baseline
 
@@ -207,6 +235,7 @@ within 50 ms remain acceptance targets, not verified promises.
 - `src/files.ts`: URI discovery and cache invalidation.
 - `src/contents.ts`: streaming content search, live documents, progress and cancellation.
 - `src/searchScope.ts`: native-style ignore/exclude settings and sibling rules.
+- `src/fileIcons.ts` / `resources/`: bundled file-type icons and associations.
 - `src/ranking.ts`: maintained matcher and candidate limits.
 - `src/latest.ts` / `src/types.ts`: request generations and result shapes.
 

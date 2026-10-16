@@ -28,6 +28,8 @@ export async function run(): Promise<void> {
   const extension = vscode.extensions.getExtension('local.telescope-picker');
   assert.ok(extension, 'Development extension is registered');
   await extension.activate();
+  const iconFont = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(extension.extensionUri, 'resources', 'seti.woff'));
+  assert.equal(Buffer.from(iconFont.subarray(0, 4)).toString(), 'wOFF', 'Bundled file-icon font is available');
   const provider = new FileProvider();
   try {
     const indexed = await provider.getFiles();
@@ -149,6 +151,33 @@ export async function run(): Promise<void> {
         && vscode.window.activeTextEditor.selection.start.line === 0,
       'Content acceptance pins the selected file at the matching line');
 
+      const groupOriginal = await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false });
+      groupOriginal.selections = selections;
+      await vscode.commands.executeCommand('telescopePicker.searchContents', 'const');
+      await until(() => editorAt(vscode.ViewColumn.One)?.document === document
+        && editorAt(vscode.ViewColumn.One)?.selection.start.line === 200,
+      'Grouped search selects a matching line, not the first file heading');
+      await until(async () => Boolean(await vscode.commands.executeCommand('telescopePicker.next')),
+        'Next match becomes available in streamed groups');
+      await until(() => editorAt(vscode.ViewColumn.One)?.document.uri.toString() === second.id,
+        'Navigation skips the next file heading');
+      await until(async () => Boolean(await vscode.commands.executeCommand('telescopePicker.next')),
+        'Third file group becomes available');
+      await until(() => editorAt(vscode.ViewColumn.One)?.document.uri.toString() === diskContent.id,
+        'Navigation reaches the third file group');
+      await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+      await until(() => vscode.window.activeTextEditor?.document === document
+        && vscode.window.activeTextEditor.selections.length === selections.length
+        && vscode.window.activeTextEditor.selections.every((selection, i) => selection.isEqual(selections[i]!)),
+      'Cancelling grouped search restores the original selections');
+      await vscode.commands.executeCommand('telescopePicker.resume');
+      await until(() => editorAt(vscode.ViewColumn.One)?.document.uri.toString() === diskContent.id,
+        'Resume restores a matching line in a later file group');
+      await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+      await until(() => vscode.window.activeTextEditor?.document === document
+        && vscode.window.activeTextEditor.selections.length === selections.length,
+      'Cancel after grouped resume restores the original editor');
+
       const cleanOriginal = await vscode.window.showTextDocument(vscode.Uri.joinPath(firstRoot.uri, 'hidden.ignored'), {
         viewColumn: vscode.ViewColumn.One, preview: true
       });
@@ -167,6 +196,6 @@ export async function run(): Promise<void> {
       assert.ok(await vscode.workspace.applyEdit(restore));
       await vscode.commands.executeCommand('workbench.action.files.revert');
     }
-    console.log('Extension-host checks passed: native popup, multi-root/exclusions, current-editor preview, dirty contents, cancel/selection/scroll restoration, background/unpinned preview restoration, temporary-tab cleanup, resume, Enter pinning, split, query-specific text search, dirty-text matching and exact-line acceptance.');
+    console.log('Extension-host checks passed: native popup, multi-root/exclusions, current-editor preview, dirty contents, cancel/selection/scroll restoration, background/unpinned preview restoration, temporary-tab cleanup, resume, Enter pinning, split, query-specific text search, dirty-text matching, exact-line acceptance, bundled icon font and grouped-result navigation/resume.');
   } finally { provider.dispose(); }
 }

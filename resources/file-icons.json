@@ -1,0 +1,2212 @@
+[
+  {
+    "kind": "suffix",
+    "pattern": ".bsl",
+    "icon": "bsl"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".mdo",
+    "icon": "mdo"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cls",
+    "icon": "salesforce"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".apex",
+    "icon": "salesforce"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".asm",
+    "icon": "asm"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".s",
+    "icon": "asm"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".bicep",
+    "icon": "bicep"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".bzl",
+    "icon": "bazel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".bazel",
+    "icon": "bazel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".BUILD",
+    "icon": "bazel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".WORKSPACE",
+    "icon": "bazel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".bazelignore",
+    "icon": "bazel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".bazelversion",
+    "icon": "bazel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".c",
+    "icon": "c"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".h",
+    "icon": "c"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".m",
+    "icon": "c"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cs",
+    "icon": "c-sharp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cshtml",
+    "icon": "html"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".aspx",
+    "icon": "html"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ascx",
+    "icon": "html"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".asax",
+    "icon": "html"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".master",
+    "icon": "html"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cc",
+    "icon": "cpp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cpp",
+    "icon": "cpp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cxx",
+    "icon": "cpp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".c++",
+    "icon": "cpp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".hh",
+    "icon": "cpp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".hpp",
+    "icon": "cpp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".hxx",
+    "icon": "cpp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".h++",
+    "icon": "cpp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".mm",
+    "icon": "cpp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".clj",
+    "icon": "clojure"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cljs",
+    "icon": "clojure"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cljc",
+    "icon": "clojure"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".edn",
+    "icon": "clojure"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cfc",
+    "icon": "coldfusion"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cfm",
+    "icon": "coldfusion"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".coffee",
+    "icon": "coffee"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".litcoffee",
+    "icon": "coffee"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".config",
+    "icon": "config"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cfg",
+    "icon": "config"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".conf",
+    "icon": "config"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cr",
+    "icon": "crystal"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ecr",
+    "icon": "crystal_embedded"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".slang",
+    "icon": "crystal_embedded"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cson",
+    "icon": "json"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".css",
+    "icon": "css"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".css.map",
+    "icon": "css"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".sss",
+    "icon": "css"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".csv",
+    "icon": "csv"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".xls",
+    "icon": "xls"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".xlsx",
+    "icon": "xls"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cu",
+    "icon": "cu"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cuh",
+    "icon": "cu"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".hu",
+    "icon": "cu"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cake",
+    "icon": "cake"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ctp",
+    "icon": "cake_php"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".d",
+    "icon": "d"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".doc",
+    "icon": "word"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".docx",
+    "icon": "word"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ejs",
+    "icon": "ejs"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ex",
+    "icon": "elixir"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".exs",
+    "icon": "elixir_script"
+  },
+  {
+    "kind": "contains",
+    "pattern": "mix",
+    "icon": "hex"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".elm",
+    "icon": "elm"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ico",
+    "icon": "favicon"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".fs",
+    "icon": "f-sharp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".fsx",
+    "icon": "f-sharp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".gitignore",
+    "icon": "git"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".gitconfig",
+    "icon": "git"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".gitkeep",
+    "icon": "git"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".gitattributes",
+    "icon": "git"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".gitmodules",
+    "icon": "git"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "COMMIT_EDITMSG",
+    "icon": "git"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "MERGE_MSG",
+    "icon": "git"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".go",
+    "icon": "go2"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".slide",
+    "icon": "go"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".article",
+    "icon": "go"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".gd",
+    "icon": "godot"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".godot",
+    "icon": "godot"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".tres",
+    "icon": "godot"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".tscn",
+    "icon": "godot"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".gradle",
+    "icon": "gradle"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".groovy",
+    "icon": "grails"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".gsp",
+    "icon": "grails"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".gql",
+    "icon": "graphql"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".graphql",
+    "icon": "graphql"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".graphqls",
+    "icon": "graphql"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".hack",
+    "icon": "hacklang"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".haml",
+    "icon": "haml"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".handlebars",
+    "icon": "mustache"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".hbs",
+    "icon": "mustache"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".hjs",
+    "icon": "mustache"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".hs",
+    "icon": "haskell"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".lhs",
+    "icon": "haskell"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".hx",
+    "icon": "haxe"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".hxs",
+    "icon": "haxe"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".hxp",
+    "icon": "haxe"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".hxml",
+    "icon": "haxe"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".html",
+    "icon": "html"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".jade",
+    "icon": "jade"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".java",
+    "icon": "java"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".class",
+    "icon": "java"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".classpath",
+    "icon": "java"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".properties",
+    "icon": "java"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".js",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".js.map",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cjs",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cjs.map",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".mjs",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".mjs.map",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".spec.js",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".spec.cjs",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".spec.mjs",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".test.js",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".test.cjs",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".test.mjs",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".es",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".es5",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".es6",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".es7",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".jinja",
+    "icon": "jinja"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".jinja2",
+    "icon": "jinja"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".json",
+    "icon": "json"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".jl",
+    "icon": "julia"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "karma.conf.js",
+    "icon": "karma"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "karma.conf.cjs",
+    "icon": "karma"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "karma.conf.mjs",
+    "icon": "karma"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "karma.conf.coffee",
+    "icon": "karma"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".kt",
+    "icon": "kotlin"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".kts",
+    "icon": "kotlin"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".dart",
+    "icon": "dart"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".less",
+    "icon": "less"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".liquid",
+    "icon": "liquid"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ls",
+    "icon": "livescript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".lua",
+    "icon": "lua"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".markdown",
+    "icon": "markdown"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".md",
+    "icon": "markdown"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".argdown",
+    "icon": "argdown"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ad",
+    "icon": "argdown"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "README.md",
+    "icon": "info"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "README.txt",
+    "icon": "info"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "README",
+    "icon": "info"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "CHANGELOG.md",
+    "icon": "clock"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "CHANGELOG.txt",
+    "icon": "clock"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "CHANGELOG",
+    "icon": "clock"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "CHANGES.md",
+    "icon": "clock"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "CHANGES.txt",
+    "icon": "clock"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "CHANGES",
+    "icon": "clock"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "VERSION.md",
+    "icon": "clock"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "VERSION.txt",
+    "icon": "clock"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "VERSION",
+    "icon": "clock"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "mvnw",
+    "icon": "maven"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "pom.xml",
+    "icon": "maven"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".mustache",
+    "icon": "mustache"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".stache",
+    "icon": "mustache"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".nim",
+    "icon": "nim"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".nims",
+    "icon": "nim"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".github-issues",
+    "icon": "github"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ipynb",
+    "icon": "notebook"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".njk",
+    "icon": "nunjucks"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".nunjucks",
+    "icon": "nunjucks"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".nunjs",
+    "icon": "nunjucks"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".nunj",
+    "icon": "nunjucks"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".njs",
+    "icon": "nunjucks"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".nj",
+    "icon": "nunjucks"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".npm-debug.log",
+    "icon": "npm"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".npmignore",
+    "icon": "npm"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".npmrc",
+    "icon": "npm"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ml",
+    "icon": "ocaml"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".mli",
+    "icon": "ocaml"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cmx",
+    "icon": "ocaml"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cmxa",
+    "icon": "ocaml"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".odata",
+    "icon": "odata"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".pl",
+    "icon": "perl"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".php",
+    "icon": "php"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".php.inc",
+    "icon": "php"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".pipeline",
+    "icon": "pipeline"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".pddl",
+    "icon": "pddl"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".plan",
+    "icon": "plan"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".happenings",
+    "icon": "happenings"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ps1",
+    "icon": "powershell"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".psd1",
+    "icon": "powershell"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".psm1",
+    "icon": "powershell"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".prisma",
+    "icon": "prisma"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".pug",
+    "icon": "pug"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".pp",
+    "icon": "puppet"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".epp",
+    "icon": "puppet"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".purs",
+    "icon": "purescript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".py",
+    "icon": "python"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".jsx",
+    "icon": "react"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".spec.jsx",
+    "icon": "react"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".test.jsx",
+    "icon": "react"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cjsx",
+    "icon": "react"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".tsx",
+    "icon": "react"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".spec.tsx",
+    "icon": "react"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".test.tsx",
+    "icon": "react"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".re",
+    "icon": "reasonml"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".res",
+    "icon": "rescript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".resi",
+    "icon": "rescript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".R",
+    "icon": "R"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".rmd",
+    "icon": "R"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".rb",
+    "icon": "ruby"
+  },
+  {
+    "kind": "contains",
+    "pattern": "Gemfile",
+    "icon": "ruby"
+  },
+  {
+    "kind": "contains",
+    "pattern": "gemfile",
+    "icon": "ruby"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".erb",
+    "icon": "html_erb"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".erb.html",
+    "icon": "html_erb"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".html.erb",
+    "icon": "html_erb"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".rs",
+    "icon": "rust"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".sass",
+    "icon": "sass"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".scss",
+    "icon": "sass"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".springBeans",
+    "icon": "spring"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".slim",
+    "icon": "slim"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".smarty.tpl",
+    "icon": "smarty"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".tpl",
+    "icon": "smarty"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".sbt",
+    "icon": "sbt"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".scala",
+    "icon": "scala"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".sol",
+    "icon": "ethereum"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".styl",
+    "icon": "stylus"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".svelte",
+    "icon": "svelte"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".swift",
+    "icon": "swift"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".sql",
+    "icon": "db"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".soql",
+    "icon": "db"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".tf",
+    "icon": "terraform"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".tf.json",
+    "icon": "terraform"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".tfvars",
+    "icon": "terraform"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".tfvars.json",
+    "icon": "terraform"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".tex",
+    "icon": "tex"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".sty",
+    "icon": "tex"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".dtx",
+    "icon": "tex"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ins",
+    "icon": "tex"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".txt",
+    "icon": "default"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".toml",
+    "icon": "config"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".twig",
+    "icon": "twig"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ts",
+    "icon": "typescript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".spec.ts",
+    "icon": "typescript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".test.ts",
+    "icon": "typescript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "tsconfig.json",
+    "icon": "tsconfig"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".vala",
+    "icon": "vala"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".vapi",
+    "icon": "vala"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".component",
+    "icon": "html"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".vue",
+    "icon": "vue"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".wasm",
+    "icon": "wasm"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".wat",
+    "icon": "wat"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".xml",
+    "icon": "xml"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".yml",
+    "icon": "yml"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".yaml",
+    "icon": "yml"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "swagger.json",
+    "icon": "json"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "swagger.yml",
+    "icon": "json"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "swagger.yaml",
+    "icon": "json"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".pro",
+    "icon": "prolog"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".zig",
+    "icon": "zig"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".jar",
+    "icon": "zip"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".zip",
+    "icon": "zip"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".wgt",
+    "icon": "wgt"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ai",
+    "icon": "illustrator"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".psd",
+    "icon": "photoshop"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".pdf",
+    "icon": "pdf"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".eot",
+    "icon": "font"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ttf",
+    "icon": "font"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".woff",
+    "icon": "font"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".woff2",
+    "icon": "font"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".otf",
+    "icon": "font"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".avif",
+    "icon": "image"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".gif",
+    "icon": "image"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".jpg",
+    "icon": "image"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".jpeg",
+    "icon": "image"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".png",
+    "icon": "image"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".pxm",
+    "icon": "image"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".svg",
+    "icon": "svg"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".svgx",
+    "icon": "image"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".tiff",
+    "icon": "image"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".webp",
+    "icon": "image"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".sublime-project",
+    "icon": "sublime"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".sublime-workspace",
+    "icon": "sublime"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".code-search",
+    "icon": "code-search"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".sh",
+    "icon": "shell"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".zsh",
+    "icon": "shell"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".fish",
+    "icon": "shell"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".zshrc",
+    "icon": "shell"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".bashrc",
+    "icon": "shell"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".mov",
+    "icon": "video"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ogv",
+    "icon": "video"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".webm",
+    "icon": "video"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".avi",
+    "icon": "video"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".mpg",
+    "icon": "video"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".mp4",
+    "icon": "video"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".mp3",
+    "icon": "audio"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ogg",
+    "icon": "audio"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".wav",
+    "icon": "audio"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".flac",
+    "icon": "audio"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".3ds",
+    "icon": "svg"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".3dm",
+    "icon": "svg"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".stl",
+    "icon": "svg"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".obj",
+    "icon": "svg"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".dae",
+    "icon": "svg"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".bat",
+    "icon": "windows"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cmd",
+    "icon": "windows"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "mime.types",
+    "icon": "config"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "Jenkinsfile",
+    "icon": "jenkins"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".babelrc",
+    "icon": "babel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".babelrc.js",
+    "icon": "babel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".babelrc.cjs",
+    "icon": "babel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "babel.config.js",
+    "icon": "babel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "babel.config.json",
+    "icon": "babel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "babel.config.cjs",
+    "icon": "babel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "BUILD",
+    "icon": "bazel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "BUILD.bazel",
+    "icon": "bazel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "WORKSPACE",
+    "icon": "bazel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "WORKSPACE.bazel",
+    "icon": "bazel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".bazelrc",
+    "icon": "bazel"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "bower.json",
+    "icon": "bower"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "Bower.json",
+    "icon": "bower"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".bowerrc",
+    "icon": "bower"
+  },
+  {
+    "kind": "contains",
+    "pattern": "dockerfile",
+    "icon": "docker"
+  },
+  {
+    "kind": "contains",
+    "pattern": "Dockerfile",
+    "icon": "docker"
+  },
+  {
+    "kind": "contains",
+    "pattern": "DOCKERFILE",
+    "icon": "docker"
+  },
+  {
+    "kind": "contains",
+    "pattern": ".dockerignore",
+    "icon": "docker"
+  },
+  {
+    "kind": "contains",
+    "pattern": "docker-healthcheck",
+    "icon": "docker"
+  },
+  {
+    "kind": "contains",
+    "pattern": "docker-compose.yml",
+    "icon": "docker"
+  },
+  {
+    "kind": "contains",
+    "pattern": "docker-compose.yaml",
+    "icon": "docker"
+  },
+  {
+    "kind": "contains",
+    "pattern": "docker-compose.override.yml",
+    "icon": "docker"
+  },
+  {
+    "kind": "contains",
+    "pattern": "docker-compose.override.yaml",
+    "icon": "docker"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".codeclimate.yml",
+    "icon": "code-climate"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".eslintrc",
+    "icon": "eslint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".eslintrc.js",
+    "icon": "eslint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".eslintrc.cjs",
+    "icon": "eslint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".eslintrc.yaml",
+    "icon": "eslint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".eslintrc.yml",
+    "icon": "eslint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".eslintrc.json",
+    "icon": "eslint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".eslintignore",
+    "icon": "eslint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "eslint.config.js",
+    "icon": "eslint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".firebaserc",
+    "icon": "firebase"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "firebase.json",
+    "icon": "firebase"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "geckodriver",
+    "icon": "firefox"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".em",
+    "icon": "ember"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".gitlab-ci.yml",
+    "icon": "gitlab"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "Gruntfile.js",
+    "icon": "grunt"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "gruntfile.babel.js",
+    "icon": "grunt"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "Gruntfile.babel.js",
+    "icon": "grunt"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "gruntfile.js",
+    "icon": "grunt"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "Gruntfile.coffee",
+    "icon": "grunt"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "gruntfile.coffee",
+    "icon": "grunt"
+  },
+  {
+    "kind": "contains",
+    "pattern": "GULPFILE",
+    "icon": "gulp"
+  },
+  {
+    "kind": "contains",
+    "pattern": "Gulpfile",
+    "icon": "gulp"
+  },
+  {
+    "kind": "contains",
+    "pattern": "gulpfile",
+    "icon": "gulp"
+  },
+  {
+    "kind": "contains",
+    "pattern": "gulpfile.js",
+    "icon": "gulp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "ionic.config.json",
+    "icon": "ionic"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "Ionic.config.json",
+    "icon": "ionic"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "ionic.project",
+    "icon": "ionic"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "Ionic.project",
+    "icon": "ionic"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".jshintrc",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".jscsrc",
+    "icon": "javascript"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "platformio.ini",
+    "icon": "platformio"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "rollup.config.js",
+    "icon": "rollup"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "sass-lint.yml",
+    "icon": "sass"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".stylelintrc",
+    "icon": "stylelint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".stylelintrc.json",
+    "icon": "stylelint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".stylelintrc.yaml",
+    "icon": "stylelint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".stylelintrc.yml",
+    "icon": "stylelint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".stylelintrc.js",
+    "icon": "stylelint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".stylelintignore",
+    "icon": "stylelint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "stylelint.config.js",
+    "icon": "stylelint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "stylelint.config.cjs",
+    "icon": "stylelint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "stylelint.config.mjs",
+    "icon": "stylelint"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "yarn.clean",
+    "icon": "yarn"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "yarn.lock",
+    "icon": "yarn"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.config.js",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.config.cjs",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.config.mjs",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.config.ts",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.config.build.js",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.config.build.cjs",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.config.build.mjs",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.config.build.ts",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.common.js",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.common.cjs",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.common.mjs",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.common.ts",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.dev.js",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.dev.cjs",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.dev.mjs",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.dev.ts",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.prod.js",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.prod.cjs",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.prod.mjs",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "webpack.prod.ts",
+    "icon": "webpack"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".direnv",
+    "icon": "config"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".env",
+    "icon": "config"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".static",
+    "icon": "config"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".editorconfig",
+    "icon": "config"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".slugignore",
+    "icon": "config"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".tmp",
+    "icon": "clock"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".htaccess",
+    "icon": "config"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".key",
+    "icon": "lock"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cert",
+    "icon": "lock"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cer",
+    "icon": "lock"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".crt",
+    "icon": "lock"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".pem",
+    "icon": "lock"
+  },
+  {
+    "kind": "contains",
+    "pattern": "LICENSE",
+    "icon": "license"
+  },
+  {
+    "kind": "contains",
+    "pattern": "LICENCE",
+    "icon": "license"
+  },
+  {
+    "kind": "contains",
+    "pattern": "LICENSE.txt",
+    "icon": "license"
+  },
+  {
+    "kind": "contains",
+    "pattern": "LICENCE.txt",
+    "icon": "license"
+  },
+  {
+    "kind": "contains",
+    "pattern": "LICENSE.md",
+    "icon": "license"
+  },
+  {
+    "kind": "contains",
+    "pattern": "LICENCE.md",
+    "icon": "license"
+  },
+  {
+    "kind": "contains",
+    "pattern": "COPYING",
+    "icon": "license"
+  },
+  {
+    "kind": "contains",
+    "pattern": "COPYING.txt",
+    "icon": "license"
+  },
+  {
+    "kind": "contains",
+    "pattern": "COPYING.md",
+    "icon": "license"
+  },
+  {
+    "kind": "contains",
+    "pattern": "COMPILING",
+    "icon": "license"
+  },
+  {
+    "kind": "contains",
+    "pattern": "COMPILING.txt",
+    "icon": "license"
+  },
+  {
+    "kind": "contains",
+    "pattern": "COMPILING.md",
+    "icon": "license"
+  },
+  {
+    "kind": "contains",
+    "pattern": "CONTRIBUTING",
+    "icon": "license"
+  },
+  {
+    "kind": "contains",
+    "pattern": "CONTRIBUTING.txt",
+    "icon": "license"
+  },
+  {
+    "kind": "contains",
+    "pattern": "CONTRIBUTING.md",
+    "icon": "license"
+  },
+  {
+    "kind": "contains",
+    "pattern": "MAKEFILE",
+    "icon": "makefile"
+  },
+  {
+    "kind": "contains",
+    "pattern": "Makefile",
+    "icon": "makefile"
+  },
+  {
+    "kind": "contains",
+    "pattern": "makefile",
+    "icon": "makefile"
+  },
+  {
+    "kind": "contains",
+    "pattern": "QMAKEFILE",
+    "icon": "makefile"
+  },
+  {
+    "kind": "contains",
+    "pattern": "QMakefile",
+    "icon": "makefile"
+  },
+  {
+    "kind": "contains",
+    "pattern": "qmakefile",
+    "icon": "makefile"
+  },
+  {
+    "kind": "contains",
+    "pattern": "OMAKEFILE",
+    "icon": "makefile"
+  },
+  {
+    "kind": "contains",
+    "pattern": "OMakefile",
+    "icon": "makefile"
+  },
+  {
+    "kind": "contains",
+    "pattern": "omakefile",
+    "icon": "makefile"
+  },
+  {
+    "kind": "contains",
+    "pattern": "CMAKELISTS.TXT",
+    "icon": "makefile"
+  },
+  {
+    "kind": "contains",
+    "pattern": "CMAKELISTS.txt",
+    "icon": "makefile"
+  },
+  {
+    "kind": "contains",
+    "pattern": "CMakeLists.txt",
+    "icon": "makefile"
+  },
+  {
+    "kind": "contains",
+    "pattern": "cmakelists.txt",
+    "icon": "makefile"
+  },
+  {
+    "kind": "contains",
+    "pattern": "Procfile",
+    "icon": "heroku"
+  },
+  {
+    "kind": "contains",
+    "pattern": "TODO",
+    "icon": "todo"
+  },
+  {
+    "kind": "contains",
+    "pattern": "TODO.txt",
+    "icon": "todo"
+  },
+  {
+    "kind": "contains",
+    "pattern": "TODO.md",
+    "icon": "todo"
+  },
+  {
+    "kind": "suffix",
+    "pattern": "npm-debug.log",
+    "icon": "npm_ignored"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".DS_Store",
+    "icon": "ignored"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cppm",
+    "icon": "cpp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cxxm",
+    "icon": "cpp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ccm",
+    "icon": "cpp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".ixx",
+    "icon": "cpp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".mxx",
+    "icon": "cpp"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".cmake",
+    "icon": "makefile"
+  },
+  {
+    "kind": "suffix",
+    "pattern": ".jsonc",
+    "icon": "json"
+  },
+  {
+    "kind": "name",
+    "pattern": "package.json",
+    "icon": "npm"
+  },
+  {
+    "kind": "name",
+    "pattern": "package-lock.json",
+    "icon": "npm"
+  }
+]

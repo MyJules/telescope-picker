@@ -97,6 +97,7 @@ export class Selection extends Range {
 export const TextEditorRevealType = { AtTop: 1, InCenter: 2, InCenterIfOutsideViewport: 3 };
 export const ViewColumn = { One: 1, Beside: -2 };
 export class ThemeIcon { constructor(readonly id: string) {} }
+export const QuickPickItemKind = { Separator: -1, Default: 0 };
 export class ThemeColor { constructor(readonly id: string) {} }
 export const fileCreated = new EventEmitter<void>();
 export const fileChanged = new EventEmitter<void>();
