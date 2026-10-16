@@ -157,7 +157,8 @@ it('surfaces discovery and opening failures without losing the popup', async () 
   await waitResults();
   window.showTextDocument.mockRejectedValueOnce(new Error('File deleted'));
   picker.accept();
-  await vi.waitFor(() => expect(picker.title).toContain('File deleted'));
+  await vi.waitFor(() => expect(picker.title).toBe('Could not open file · See Output'));
+  expect(log).toHaveBeenCalledWith('File deleted');
   expect(picker.enabled).toBe(true);
 });
 
@@ -234,6 +235,12 @@ it('shows explicit content-query limits and cancels a pending scan when the popu
   expect(window.activeTextEditor?.document).toBe(original.document);
 });
 it('keeps automatic-preview errors visible while content results continue streaming', async () => {
+  let title = picker.title;
+  const titles: string[] = [];
+  Object.defineProperty(picker, 'title', {
+    get: () => title,
+    set: (value: string) => { title = value; titles.push(value); }
+  });
   const uri = 'file:///workspace/large.ts';
   const item = {
     id: JSON.stringify([uri, 0]), uri, path: 'large.ts', root: 'workspace',
@@ -250,9 +257,22 @@ it('keeps automatic-preview errors visible while content results continue stream
     await controller.show(false, 'contents');
     picker.value = 'needle';
     await vi.waitFor(() => expect(picker.busy).toBe(false), { timeout: 2000 });
-    expect(picker.title).toContain('1 MiB');
-    expect(picker.title).toContain('Search complete');
+    expect(picker.title).toBe('Large file · Enter to open');
+    expect(picker.title.length).toBeLessThan(40);
+    expect(titles.filter(value => value === 'Large file · Enter to open')).toHaveLength(1);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('1 MiB'));
   } finally { spy.mockRestore(); }
+});
+
+it('keeps long preview failures out of the popup and restores the result title on navigation', async () => {
+  const reason = `Cannot open file:///workspace/${'long-folder/'.repeat(100)}missing.cpp`;
+  workspace.fs.stat.mockRejectedValueOnce(new Error(reason));
+  controller.navigate(1);
+  await vi.waitFor(() => expect(picker.title).toBe('Preview unavailable · See Output'));
+  expect(log).toHaveBeenCalledWith(reason);
+  expect(picker.title.length).toBeLessThan(40);
+  controller.navigate(-1);
+  expect(picker.title).toBe('Telescope Picker · 2 results');
 });
 
 it('groups repeated file matches and skips headings during navigation and acceptance', async () => {

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { FileProvider } from './files';
 import { LatestRequest } from './latest';
-import { EditorPreview } from './editorPreview';
+import { EditorPreview, PreviewTooLargeError } from './editorPreview';
 import { rankFiles } from './ranking';
 import { ContentProvider, type ContentUpdate } from './contents';
 import type { ContentMatch, MatchLocation } from './types';
@@ -71,7 +71,8 @@ export class PickerController implements vscode.Disposable {
     let previewError: string | undefined;
     const title = (value: string): void => {
       resultTitle = value;
-      picker.title = previewError ? `Could not preview file: ${previewError} · ${value}` : value;
+      const next = previewError ?? value;
+      if (picker.title !== next) picker.title = next;
     };
     picker.title = 'Telescope Picker';
     const modeLabel = (): string => state.mode === 'files' ? 'Files' : 'File Contents';
@@ -94,9 +95,11 @@ export class PickerController implements vscode.Disposable {
       return message;
     };
     const preview = new EditorPreview(previous, column, reason => {
-      const message = report(reason);
+      report(reason);
       if (!closed) {
-        previewError = message;
+        previewError = reason instanceof PreviewTooLargeError
+          ? 'Large file · Enter to open'
+          : 'Preview unavailable · See Output';
         title(resultTitle);
       }
     });
@@ -272,7 +275,8 @@ export class PickerController implements vscode.Disposable {
         close(false);
       } catch (reason) {
         if (!closed) {
-          picker.title = `Could not open file: ${report(reason)}`;
+          report(reason);
+          picker.title = 'Could not open file · See Output';
           picker.enabled = true;
           opening = false;
           picker.show();

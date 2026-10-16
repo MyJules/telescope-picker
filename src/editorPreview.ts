@@ -3,6 +3,10 @@ import type { MatchLocation } from './types';
 
 const MAX_AUTO_PREVIEW_BYTES = 1024 * 1024;
 
+export class PreviewTooLargeError extends Error {
+  constructor() { super('File exceeds the 1 MiB automatic preview limit. Press Enter to open it.'); }
+}
+
 export class EditorPreview {
   private generation = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -45,7 +49,7 @@ export class EditorPreview {
           const stat = await vscode.workspace.fs.stat(uri);
           if (!this.current(generation)) return;
           if (stat.size > MAX_AUTO_PREVIEW_BYTES)
-            throw new Error('File exceeds the 1 MiB automatic preview limit. Press Enter to open it.');
+            throw new PreviewTooLargeError();
           document = await vscode.workspace.openTextDocument(uri);
         }
         if (!this.current(generation)) return;

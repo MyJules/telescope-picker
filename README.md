@@ -41,6 +41,11 @@ created by the picker are cleaned on cancel; files you modify or pin are kept.
 If native preview tabs are disabled in your settings, extension-created clean
 tabs are still tracked and cleaned rather than accumulating.
 
+Files over 1 MiB that are not already open skip automatic preview and show
+the compact title **Large file · Enter to open**. Enter can still open them.
+Other preview/open failures use short status titles; full details are logged
+to **Telescope Picker** in Output rather than expanding the popup.
+
 Previews are normal VS Code editors, not artificially read-only documents. The
 popup keeps keyboard focus, but you can deliberately click the editor to edit.
 Such edits are preserved. Enter commits the file choice, not document changes.
