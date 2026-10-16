@@ -9,7 +9,7 @@ export function activate(context: vscode.ExtensionContext): void {
       provideTextDocumentContent: () => ''
     }),
     vscode.commands.registerCommand('telescopePicker.configureShortcuts', () =>
-      vscode.commands.executeCommand('workbench.action.openGlobalKeybindings', '@ext:local.telescope-picker')),
+      vscode.commands.executeCommand('workbench.action.openGlobalKeybindings', `@ext:${context.extension.id}`)),
     vscode.commands.registerCommand('telescopePicker.files', () => controller.show()),
     vscode.commands.registerCommand('telescopePicker.searchContents', (query?: unknown) => {
       if (query !== undefined && typeof query !== 'string') throw new Error('Content-search query must be a string.');

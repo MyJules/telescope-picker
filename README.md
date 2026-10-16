@@ -338,8 +338,10 @@ npm run package
 ```
 
 Press F5 for an Extension Development Host. `npm run watch` rebuilds while
-developing. The local VSIX publisher is `local`; choose a real publisher and
-repository before Marketplace publication.
+developing. The publisher is `jules`, so the extension ID is
+`jules.telescope-picker`. Publishing requires access to that Marketplace publisher.
+When switching from earlier `local.telescope-picker` builds, uninstall the local
+extension before installing this one to avoid duplicate command registrations.
 
 The original extension logo lives in `media/icon.svg`; VS Code uses the
 256 x 256 PNG in `media/icon.png`. After editing the vector source, run

@@ -157,7 +157,7 @@ async function checkGitDiffs(): Promise<void> {
 }
 
 async function checkPicker(): Promise<void> {
-  const extension = vscode.extensions.getExtension('local.telescope-picker');
+  const extension = vscode.extensions.getExtension('jules.telescope-picker');
   assert.ok(extension, 'Development extension is registered');
   await extension.activate();
   const provider = new FileProvider();
