@@ -4,11 +4,6 @@ https://github.com/farzher/fuzzysort
 Glob matching also bundles picomatch:
 https://github.com/micromatch/picomatch
 
-File-type glyphs and associations are derived from Seti UI:
-https://github.com/jesseweed/seti-ui
-Copyright (c) 2014 Jesse Weed
-The bundled font's full MIT notice is in resources/seti-LICENSE.txt.
-
 Content search packages @vscode/ripgrep and its platform-specific binary:
 https://github.com/microsoft/vscode-ripgrep
 https://github.com/BurntSushi/ripgrep

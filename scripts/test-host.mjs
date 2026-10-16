@@ -4,9 +4,12 @@ import path from 'node:path';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 await runTests({
-  version: process.env.VSCODE_TEST_VERSION ?? '1.95.3',
+  version: process.env.VSCODE_TEST_VERSION ?? '1.108.0',
   vscodeExecutablePath: process.env.VSCODE_EXECUTABLE_PATH,
-  extensionDevelopmentPath: process.env.TELESCOPE_TEST_EXTENSION_PATH ?? root,
+  extensionDevelopmentPath: [
+    process.env.TELESCOPE_TEST_EXTENSION_PATH ?? root,
+    process.env.TELESCOPE_TEST_ICON_THEME_PATH ?? path.join(root, 'test', 'icon-theme')
+  ],
   extensionTestsPath: path.join(root, 'dist', 'test', 'host.js'),
   launchArgs: [
     path.join(root, 'test', 'fixtures', 'picker.code-workspace'),

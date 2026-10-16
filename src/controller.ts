@@ -4,7 +4,6 @@ import { LatestRequest } from './latest';
 import { EditorPreview } from './editorPreview';
 import { rankFiles } from './ranking';
 import { ContentProvider, type ContentUpdate } from './contents';
-import { fileIcon } from './fileIcons';
 import type { ContentMatch, MatchLocation } from './types';
 
 type PickerMode = 'files' | 'contents';
@@ -142,10 +141,9 @@ export class PickerController implements vscode.Disposable {
       for (const matches of groups.values()) {
         const first = matches[0];
         if (!first) continue;
-        const icon = fileIcon(first.path);
         items.push({
           kind: vscode.QuickPickItemKind.Separator,
-          label: `$(${icon.id}) ${literalLabel(first.path)} · ${literalLabel(first.root)} (${matches.length})`
+          label: `${literalLabel(first.path)} · ${literalLabel(first.root)} (${matches.length})`
         });
         for (const match of matches.sort((a, b) => a.location.line - b.location.line)) {
           const text = match.location.text;
@@ -153,7 +151,8 @@ export class PickerController implements vscode.Disposable {
           const excerpt = text.slice(start, start + 400).trim();
           items.push({
             id: match.id, uri: match.uri, path: match.path, location: match.location,
-            label: literalLabel(`${start ? '...' : ''}${excerpt}${start + 400 < text.length ? '...' : ''}`),
+            resourceUri: vscode.Uri.parse(match.uri), iconPath: vscode.ThemeIcon.File,
+            label: literalLabel(`${start ? '...' : ''}${excerpt || '(whitespace)'}${start + 400 < text.length ? '...' : ''}`),
             description: `Line ${match.location.line + 1}`,
             alwaysShow: true, buttons: [splitButton]
           });
@@ -196,7 +195,7 @@ export class PickerController implements vscode.Disposable {
         const ranked = rankFiles(indexed.files, query);
         const items: FileItem[] = ranked.items.map(file => ({
           id: file.id, uri: file.id, path: file.path, label: literalLabel(file.path), description: literalLabel(file.root),
-          iconPath: fileIcon(file.path), alwaysShow: true, buttons: [splitButton]
+          resourceUri: vscode.Uri.parse(file.id), iconPath: vscode.ThemeIcon.File, alwaysShow: true, buttons: [splitButton]
         }));
         title(`Telescope Picker · ${ranked.total} results`
           + (ranked.truncated ? ` (showing ${items.length})` : '')

@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { PickerController } from '../src/controller';
 import { ContentProvider, type ContentUpdate } from '../src/contents';
 import { createContentMatcher } from '../src/ranking';
-import { commands, createDocument, documentChanged, fileCreated, MockQuickPick, resetEditors, window, workspace, Uri } from './vscode';
+import { commands, configurationChanged, createDocument, documentChanged, fileCreated, MockQuickPick, resetEditors, settings, window, workspace, Uri } from './vscode';
 
 class State implements vscode.Memento {
   readonly saved: unknown[] = [];
@@ -56,12 +56,47 @@ it('uses a native popup without creating or focusing a preview panel', async () 
   expect(window.createWebviewPanel).not.toHaveBeenCalled();
   expect(commands.executeCommand.mock.calls.some(call => call[0].includes('preview'))).toBe(false);
   expect(picker.ignoreFocusOut).toBe(true);
-  expect(picker.items[0]?.iconPath).toEqual(new vscode.ThemeIcon('telescope-picker-file-cpp'));
+  expect(picker.items[0]?.iconPath).toBe(vscode.ThemeIcon.File);
+  expect(picker.items[0]?.resourceUri?.toString()).toBe('file:///workspace/src/main.cpp');
 });
 it('previews in the original editor while preserving popup focus', async () => {
   await vi.waitFor(() => expect(window.showTextDocument).toHaveBeenCalledWith(
     expect.objectContaining({ uri: expect.anything() }), { viewColumn: 1, preserveFocus: true, preview: true }));
   expect(window.activeTextEditor?.document.uri.toString()).toBe('file:///workspace/src/main.cpp');
+});
+it('delegates icons to native file resources without rebuilding the picker on theme changes', async () => {
+  const items = picker.items;
+  const active = picker.activeItems;
+  settings.set('workbench.iconTheme', 'material-icon-theme');
+  configurationChanged.fire({ affectsConfiguration: key => key === 'workbench.iconTheme' });
+  expect(picker.items).toBe(items);
+  expect(picker.activeItems).toBe(active);
+  await contentMode('Needle');
+  await vi.waitFor(() => expect(contentItems()).toHaveLength(3));
+  expect(contentItems().every(item => item.iconPath === vscode.ThemeIcon.File)).toBe(true);
+  expect(contentItems().map(item => item.resourceUri?.toString())).toEqual([
+    'file:///workspace/src/main.cpp', 'file:///workspace/src/main.cpp', 'file:///workspace/src/other.cpp'
+  ]);
+  expect(picker.items.filter(item => item.kind === vscode.QuickPickItemKind.Separator)
+    .every(item => !item.iconPath && !item.resourceUri && !item.label.includes('$('))).toBe(true);
+});
+it('keeps whitespace matches explicit instead of deriving a filename label from the resource URI', async () => {
+  const uri = vscode.Uri.parse('file:///workspace/spaces.cpp');
+  workspace.textDocuments.push(createDocument(uri, false, '   '));
+  vi.spyOn(ContentProvider.prototype, 'search').mockImplementation(async (_query, update) => {
+    update({
+      items: [{
+        id: 'whitespace', uri: uri.toString(), path: 'spaces.cpp', root: 'workspace',
+        location: { line: 0, text: '   ', matches: [0] }
+      }],
+      total: 1, roots: 1, searchedRoots: 1, complete: true, binary: 0, unsupported: 0
+    });
+  });
+  await controller.show(false, 'contents');
+  picker.value = ' ';
+  await vi.waitFor(() => expect(contentItems()).toHaveLength(1));
+  expect(contentItems()[0]?.label).toBe('(whitespace)');
+  expect(contentItems()[0]?.resourceUri?.toString()).toBe(uri.toString());
 });
 it('restores the original document and saves resume state on Escape', async () => {
   picker.hide();
@@ -151,7 +186,7 @@ it('searches lines, preserves code-editor previews, and opens a match at its rea
   expect(picker.title).toContain('2 matching lines');
   expect(picker.items[0]).toMatchObject({
     kind: vscode.QuickPickItemKind.Separator,
-    label: '$(telescope-picker-file-cpp) src/main.cpp · workspace (1)'
+    label: 'src/main.cpp · workspace (1)'
   });
   expect(contentItems()[0]?.description).toBe('Line 2');
   expect(picker.activeItems[0]?.id).toBe(contentItems()[0]?.id);
@@ -349,6 +384,6 @@ it('groups repeated file matches and skips headings during navigation and accept
     await controller.show(false, 'contents');
     picker.value = 'icon';
     await vi.waitFor(() => expect(contentItems()).toHaveLength(1));
-    expect(picker.items[0]?.label).toBe('$(telescope-picker-file-cpp) \\$(warning).cpp · \\$(error) (1)');
+    expect(picker.items[0]?.label).toBe('\\$(warning).cpp · \\$(error) (1)');
     expect(contentItems()[0]?.label).toContain('\\$(warning)');
   });

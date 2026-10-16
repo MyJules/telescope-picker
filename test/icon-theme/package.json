@@ -1,0 +1,11 @@
+{
+  "name": "picker-test-icons",
+  "publisher": "local",
+  "version": "1.0.0",
+  "engines": { "vscode": "^1.108.0" },
+  "contributes": {
+    "iconThemes": [
+      { "id": "picker-test-icons", "label": "Picker Test Icons", "path": "./icons.json" }
+    ]
+  }
+}

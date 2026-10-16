@@ -96,7 +96,10 @@ export class Selection extends Range {
 }
 export const TextEditorRevealType = { AtTop: 1, InCenter: 2, InCenterIfOutsideViewport: 3 };
 export const ViewColumn = { One: 1, Beside: -2 };
-export class ThemeIcon { constructor(readonly id: string) {} }
+export class ThemeIcon {
+  static readonly File = new ThemeIcon('file');
+  constructor(readonly id: string) {}
+}
 export const QuickPickItemKind = { Separator: -1, Default: 0 };
 export class ThemeColor { constructor(readonly id: string) {} }
 export const fileCreated = new EventEmitter<void>();
@@ -142,7 +145,7 @@ export const workspace = {
   }),
   fs: {
     stat: vi.fn(async (_uri: VscodeUri) => ({ size: 20 })),
-    readFile: vi.fn<() => Promise<Uint8Array>>(async () => new TextEncoder().encode('int main() { return 0; }'))
+    readFile: vi.fn<(uri: VscodeUri) => Promise<Uint8Array>>(async () => new TextEncoder().encode('int main() { return 0; }'))
   }
 };
 type MockItem = QuickPickItem & { id?: string; path?: string };

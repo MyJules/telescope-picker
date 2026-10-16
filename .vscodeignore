@@ -1,7 +1,6 @@
 src/**
 test/**
 scripts/**
-resources/file-icons.json
 .vscode/**
 .vscode-test/**
 node_modules/fuzzysort/**

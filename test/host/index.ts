@@ -25,11 +25,20 @@ function assertNoPickerTabs(): void {
 }
 
 export async function run(): Promise<void> {
+  const configuration = vscode.workspace.getConfiguration('workbench');
+  const previous = configuration.get<string | null>('iconTheme');
+  try {
+    await configuration.update('iconTheme', process.env.TELESCOPE_TEST_ICON_THEME ?? 'picker-test-icons', vscode.ConfigurationTarget.Global);
+    await checkPicker();
+  } finally {
+    await configuration.update('iconTheme', previous, vscode.ConfigurationTarget.Global);
+  }
+}
+
+async function checkPicker(): Promise<void> {
   const extension = vscode.extensions.getExtension('local.telescope-picker');
   assert.ok(extension, 'Development extension is registered');
   await extension.activate();
-  const iconFont = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(extension.extensionUri, 'resources', 'seti.woff'));
-  assert.equal(Buffer.from(iconFont.subarray(0, 4)).toString(), 'wOFF', 'Bundled file-icon font is available');
   const provider = new FileProvider();
   try {
     const indexed = await provider.getFiles();
@@ -69,6 +78,17 @@ export async function run(): Promise<void> {
       await vscode.commands.executeCommand('telescopePicker.files');
       await vscode.commands.executeCommand('telescopePicker.next');
       await until(() => editorAt(vscode.ViewColumn.One)?.document.uri.toString() === second.id, 'Selection previews in the original editor group');
+      await vscode.workspace.getConfiguration('workbench').update('iconTheme', 'vs-seti', vscode.ConfigurationTarget.Global);
+      assert.equal(editorAt(vscode.ViewColumn.One)?.document.uri.toString(), second.id,
+        'Switching from image to font icons preserves the preview');
+      assert.equal(await vscode.commands.executeCommand('telescopePicker.previous'), true);
+      await until(() => editorAt(vscode.ViewColumn.One)?.document.uri.toString() === first.id,
+        'Navigation still works after an active icon-theme change');
+      await vscode.workspace.getConfiguration('workbench').update('iconTheme',
+        process.env.TELESCOPE_TEST_ICON_THEME ?? 'picker-test-icons', vscode.ConfigurationTarget.Global);
+      assert.equal(await vscode.commands.executeCommand('telescopePicker.next'), true);
+      await until(() => editorAt(vscode.ViewColumn.One)?.document.uri.toString() === second.id,
+        'Navigation still works after restoring the image icon theme');
       assert.equal(document.getText(), unsavedText, 'Preview does not alter unsaved contents');
       assert.ok(document.isDirty);
       assertNoPickerTabs();
@@ -196,6 +216,6 @@ export async function run(): Promise<void> {
       assert.ok(await vscode.workspace.applyEdit(restore));
       await vscode.commands.executeCommand('workbench.action.files.revert');
     }
-    console.log('Extension-host checks passed: native popup, multi-root/exclusions, current-editor preview, dirty contents, cancel/selection/scroll restoration, background/unpinned preview restoration, temporary-tab cleanup, resume, Enter pinning, split, query-specific text search, dirty-text matching, exact-line acceptance, bundled icon font and grouped-result navigation/resume.');
+    console.log('Extension-host checks passed: native file-resource icons and active image/font theme switching, native popup, multi-root/exclusions, current-editor preview, dirty contents, cancel/selection/scroll restoration, background/unpinned preview restoration, temporary-tab cleanup, resume, Enter pinning, split, query-specific text search, dirty-text matching, exact-line acceptance, grouped-result navigation/resume.');
   } finally { provider.dispose(); }
 }

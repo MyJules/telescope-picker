@@ -1,0 +1,10 @@
+{
+  "iconDefinitions": {
+    "default": { "iconPath": "./icons/default.svg" },
+    "cpp": { "iconPath": "./icons/cpp.svg" },
+    "typescript": { "iconPath": "./icons/typescript.svg" }
+  },
+  "file": "default",
+  "fileExtensions": { "cpp": "cpp", "ts": "typescript" },
+  "languageIds": { "cpp": "cpp" }
+}
