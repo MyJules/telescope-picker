@@ -1,5 +1,5 @@
 import fuzzysort, { type KeysResult, type Result, type SnapshotKeys } from 'fuzzysort';
-import type { ResultItem } from './protocol';
+import type { ResultItem } from './types';
 
 export interface IndexedFile {
   id: string;

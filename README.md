@@ -1,83 +1,90 @@
 # Telescope Picker
 
-A standalone, desktop VS Code extension prototype: a keyboard-first file picker
-with fuzzy results and a read-only, highlighted code preview. The picker lives
-in an **editor tab**, not an unsupported floating overlay. This project has no
-dependency on the neighboring C++ project.
+A standalone desktop VS Code extension with a **native fuzzy file popup**.
+Selecting a result previews the file **where your code is already open**, in
+the original editor group. There is no bottom preview panel or picker webview.
 
 ## Try it
 
 Requires desktop VS Code 1.95 or newer.
 
-1. Install `telescope-picker-0.1.1.vsix` using **Extensions: Install from VSIX**.
-2. Open a folder or multi-root workspace.
-3. Run **Telescope Picker: Find Files**, or press **Ctrl+Alt+P**
-   (**Cmd+Alt+P** on macOS).
+1. Install `telescope-picker-0.3.0.vsix` using **Extensions: Install from VSIX**.
+2. Run **Developer: Reload Window** when updating an already-running version.
+3. Open a folder or multi-root workspace.
+4. Press **Ctrl+Alt+P** (**Cmd+Alt+P** on macOS), or run
+   **Telescope Picker: Find Files**.
 
-| Key | Action |
+The native popup keeps input focus while the selected file appears in the
+current code editor behind it. Native VS Code syntax highlighting, language
+support, encoding, and unsaved document contents apply.
+
+| Key / action | Behavior |
 | --- | --- |
 | Type | Fuzzy-match filenames and relative paths |
-| Up / Down | Select without moving focus out of the input |
-| Page Up / Page Down | Move ten results |
-| Enter | Open the selected file in the original editor group |
-| Ctrl+Enter / Cmd+Enter | Open beside |
-| Escape | Close and restore the previous editor and selection |
-| Alt+P | Toggle preview |
-| Alt+Up / Alt+Down | Scroll preview without moving input focus |
-| Tab | Reach the preview toggle and scrollable code region |
+| Up / Down | Select and preview files in the original editor group |
+| Enter | Keep the selected file open as a normal, non-preview tab |
+| Ctrl+Enter (Windows/Linux), Cmd+Enter (macOS) | Restore the original file on the left and open the selection beside |
+| Per-result split icon | Open that file beside |
+| Escape | Close the popup, remove temporary previews, and restore the original file, selections, visible range, and editor focus |
+| Ctrl+J / Ctrl+K | Navigate if `telescopePicker.vimNavigation` is enabled |
 
-Enable `telescopePicker.vimNavigation` for Ctrl+J / Ctrl+K navigation.
-The binding does not replace VS Code's Quick Open. Remap it in Keyboard
-Shortcuts if it conflicts with an installed extension.
+The original document is never edited, saved, or reverted by the extension.
+Dirty documents, existing tabs, and displaced background previews are preserved.
+An original unpinned preview is reopened as a preview on cancel, even if VS Code
+closed its document while replacing the tab. Preview uses normal editor
+tabs temporarily, unlike the earlier webview implementation. Temporary tabs
+created by the picker are cleaned on cancel; files you modify or pin are kept.
+If native preview tabs are disabled in your settings, extension-created clean
+tabs are still tracked and cleaned rather than accumulating.
+
+Previews are normal VS Code editors, not artificially read-only documents. The
+popup keeps keyboard focus, but you can deliberately click the editor to edit.
+Such edits are preserved. Enter commits the file choice, not document changes.
+If no text editor was open, cancel closes the picker-created preview tabs and
+returns focus to the editor group. Other existing editor tabs are not closed.
 
 **Telescope Picker: Resume Picker** restores the last query and selected URI.
-State is saved per workspace when the picker closes, including after acceptance.
-Invoking Find Files while the picker is open focuses the existing picker.
-Click once to select a result; double-click to open it.
-
-At narrow widths, the preview collapses automatically. Toggle it to show a
-stacked results/preview layout. Theme colors, editor fonts, focus outlines,
-high-contrast borders, reduced-motion preferences, combobox/listbox semantics,
-live result counts, and explicit errors are supported. Syntax colors use VS Code
-theme color variables, not the editor's TextMate or semantic token engine.
-Results and long previews scroll within their panes; the footer reserves its
-own space and wraps shortcut hints rather than overlapping file or code text.
+State is saved per workspace on close or acceptance. Opening an already-open
+picker reuses it. Native Quick Pick supplies accessibility, matching highlights,
+themes, fonts, and final result ordering. The extension pre-ranks up to 200
+candidates with fuzzysort. Remap shortcuts if another extension conflicts.
 
 ## Discovery and preview behavior
 
-- Discovery uses public `workspace.findFiles` APIs, per workspace root, with the
-  default exclusion argument. **`files.exclude` applies. `search.exclude`,
-  `.gitignore`, and `.ignore` are not additionally applied.** Put additional
-  exclusions in `files.exclude`, including dependency/build directories if needed.
-- Roots have separate badges; duplicate root names include their URI. Overlapping
-  roots are deduplicated by URI. The index is cached and invalidated on file
-  creation/deletion, root changes, or `files.exclude` changes.
-- The index contains at most 100,000 unique paths. Queries report total matches
-  within that index and render at most 200 rows. Both limits are disclosed in
-  the status area. No-workspace, loading, no-match, discovery, preview, and open
-  failures are explicit; error details also appear in **Output: Telescope Picker**.
-- Preview uses unsaved text from already-open documents. Otherwise it reads
-  through `workspace.fs`, never opens a text document or editor, and never writes
-  files. Since that public API reads whole resources, files over **1 MiB** are
-  rejected before reading; a size check also runs after reading.
-- Displayed previews are bounded to **128 KiB of UTF-8, 400 lines, and 2,000
-  characters per line**. Truncation is indicated. Binary, UTF-16, invalid UTF-8,
-  deleted, and unavailable files show an explanation instead of a misleading
-  empty preview. Open the file normally to inspect unsupported encodings/sizes.
-- highlight.js highlights common languages, CMake, and C++ module extensions;
-  unknown languages remain escaped plain text. Match highlights are in the
-  result paths. Preview is read-only and scrollable, not an embedded Monaco.
-- Preview requests are coalesced over 35 ms. Query and selection generations
-  reject stale responses. Closing cancels discovery and preview tokens and
-  prevents late work from updating a disposed picker. Some `workspace.fs`
-  providers cannot interrupt an in-flight read; its result is still discarded.
-- No private DOM, internal services, bundled executable paths, external content,
-  telemetry, code execution, or network search backend is used. Restricted
-  workspaces are supported because the extension only lists/reads/opens files.
+- Discovery uses public `workspace.findFiles` APIs for each workspace root.
+  **`files.exclude` applies; `search.exclude`, `.gitignore`, and `.ignore` are
+  not additionally applied.** Add build/dependency directories to `files.exclude`
+  if they should not appear.
+- Root descriptions distinguish duplicate filenames. Equal root names include
+  their URI, and overlapping roots are deduplicated by URI. The cached index is
+  invalidated on file creation/deletion, root changes, or `files.exclude` changes.
+- The index is capped at 100,000 unique paths and the popup receives at most 200
+  ranked candidates. The title discloses truncation and total match counts.
+  Queries over 1,024 characters show an explicit error.
+- Loading, no matches, discovery errors, preview errors, and opening failures are
+  explicit. Details are logged in **Output: Telescope Picker**. Status rows do
+  not open files.
+- Automatic preview waits 35 ms to coalesce rapid navigation. Files already
+  loaded by VS Code use their live contents. Other resources are checked with
+  `workspace.fs.stat`; files over **1 MiB** are not automatically loaded.
+  Press Enter to explicitly open an oversized file.
+- Native document/editor APIs handle encoding and binary/unsupported-resource
+  errors. An unsuccessful automatic preview leaves the prior editor intact and
+  reports the error in the popup title. No custom truncated/plain-text preview
+  or separate syntax-highlighting dependency remains.
+- Document/editor opens cannot be cancelled by the public API. Generation checks
+  discard obsolete document loads, and editor changes are serialized so cancel
+  restores the original file **after** an in-flight preview open completes.
+  A new picker waits for that restoration before capturing its original editor.
+- Selection ranges and the viewport's center line are restored using public editor
+  APIs. Tests allow one line of rounding; VS Code does not expose pixel-exact
+  viewport offsets.
+- No private DOM, internal services, executable discovery, webview content,
+  telemetry, code execution, automatic writes, or global setting changes are used.
 
-Desktop remote workspaces use URI-based APIs and the workspace extension host.
-SSH, WSL, containers, macOS, Linux, and real screen-reader workflows still need
-manual qualification. Browser-hosted VS Code is intentionally not supported.
+Restricted workspaces and desktop URI-based remote workspaces are supported by
+design. SSH, WSL, containers, macOS, Linux, and real screen-reader workflows need
+additional manual qualification. Browser-hosted VS Code is not supported.
 
 ## Develop and validate
 
@@ -93,58 +100,43 @@ npm run benchmark
 npm run package
 ```
 
-Press F5 for an Extension Development Host. `npm run watch` rebuilds bundles
-while developing. The VSIX is a local prototype with publisher `local`; choose
-a real publisher and repository before Marketplace publication.
+Press F5 for an Extension Development Host. `npm run watch` rebuilds while
+developing. The local VSIX publisher is `local`; choose a real publisher and
+repository before Marketplace publication.
 
-`npm test` runs ranking relevance, protocol, cancellation, provider/cache,
-bounded-preview, controller/lifecycle, and jsdom keyboard/interaction tests.
-`npm run test:host` downloads and tests VS Code **1.95.3** in an isolated profile
-against the two-root fixture workspace. Set `VSCODE_TEST_VERSION` to another
-release, or `VSCODE_EXECUTABLE_PATH` to a desktop executable. It checks real
-exclusions, roots, dirty documents, no preview-tab clutter, panel reuse,
-close/focus restoration, and resume.
+Unit tests cover relevance, discovery/cache, request generations, the native
+popup, editor-preview cancellation/races, dirty documents, pinned/existing tabs,
+preview-disabled settings, restoration, acceptance, and splitting.
+Extension-host tests run on VS Code **1.95.3** against an isolated two-root
+workspace and exercise actual preview switching, dirty contents, original
+selections/scroll restoration, temporary-tab cleanup, Enter pinning, resume,
+and opening beside. Set `VSCODE_TEST_VERSION` or `VSCODE_EXECUTABLE_PATH` to
+test another desktop build.
 
-`npm run preview` serves the actual HTML/CSS/webview with a **50,000-file mock**
-and a 400-line preview to exercise scrolling and footer containment
-at `http://127.0.0.1:4173`. It is a visual/keyboard harness, not a web extension.
-It does not open real files or test VS Code editor focus. Stop it with Ctrl+C.
-
-If npm 10.9.2 fails resolving Vitest's optional peers with an `edgesOut` error,
-use `npx --yes npm@11 ci`. No global npm upgrade is required.
+If npm 10.9.2 crashes resolving Vitest optional peers with an `edgesOut` error,
+use `npx --yes npm@11 ci` instead of upgrading global npm.
 
 ### Performance baseline
 
-Measured on Windows x64, AMD Ryzen 7 7700X, 63 GiB reported RAM,
-Node 22.16.0, using 50,000 synthetic C++ paths spread over 250 directories.
-The benchmark warms five different queries, then measures 100 ranking calls:
-approximately **13.5 ms p50 / 22.2 ms p95 / 29 ms max** in the final validation run.
-It checks the 200-row output limit and fails if ranking p95 exceeds 50 ms.
-The relevance tests cover basename preference, path abbreviations, CMake,
-case-insensitive queries, highlighted character positions, and duplicate roots.
-The maintained `fuzzysort` matcher uses cached immutable snapshots and native
-scoring; avoiding a per-candidate custom score callback materially reduced latency.
+The ranking benchmark uses 50,000 synthetic C++ paths over 250 directories and
+100 warm queries. On Windows x64, AMD Ryzen 7 7700X, 63 GiB reported RAM,
+Node 22.16.0, the v0.2 baseline was approximately **18 ms p50 / 29 ms p95**.
+It verifies the 200-result limit and fails above 50 ms ranking p95.
+Immutable fuzzysort snapshots avoid per-candidate custom scoring costs.
 
-These numbers cover **host ranking only**, not IPC, discovery, webview rendering,
-or time to focus. Warm opening within 150 ms and end-to-end visible query updates
-within 50 ms remain acceptance targets, **not verified promises**.
-Browser mock checks validate input focus, selection, preview rendering, and the
-480 px collapse/toggle layout, but are not substitutes for extension-host or
-real assistive-technology testing.
+These figures exclude native popup rendering, IPC, discovery, document loading,
+and editor activation. Opening within 150 ms and end-to-end visible updates
+within 50 ms remain acceptance targets, not verified promises.
 
 ## Boundaries and next work
 
-- `src/controller.ts`: lifecycle, selection, focus, resume, cancellation.
-- `src/files.ts`: URI-based discovery and cache invalidation.
-- `src/ranking.ts`: maintained fuzzy matcher, limits, highlight positions.
-- `src/preview.ts`: bounded resource loading and escaped syntax highlighting.
-- `src/protocol.ts`: validated, typed host/UI messages.
-- `src/webview/`: DOM rendering, keyboard controls, accessibility.
+- `src/controller.ts`: native popup lifecycle, query, navigation, resume, acceptance.
+- `src/editorPreview.ts`: serialized native previews, tab ownership and restoration.
+- `src/files.ts`: URI discovery and cache invalidation.
+- `src/ranking.ts`: maintained matcher and candidate limits.
+- `src/latest.ts` / `src/types.ts`: request generations and result shapes.
 
-This is the file-picking deliverable, not the entire roadmap. Live grep,
-open-editor/recent-file providers, symbols, Git operations, and plugins are not
-implemented. Resume was included early because it also validates lifecycle state.
-Before adding search infrastructure, assess the editor-tab interaction in a real
-workspace. Then measure end-to-end timings, expand platform/accessibility tests,
-and validate stable public text-search APIs before choosing a packaged ripgrep
-backend. No grep backend or undocumented executable discovery is present.
+Live grep, open-editor/recent-file providers, symbols, Git operations, and
+plugins are not implemented. Validate this native popup/current-editor workflow
+before adding providers. For grep, verify stable public search APIs before
+choosing a packaged ripgrep backend.

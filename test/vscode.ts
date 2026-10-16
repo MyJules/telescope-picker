@@ -1,5 +1,8 @@
 import { vi } from 'vitest';
-import type { TextDocument } from 'vscode';
+import type {
+  QuickInputButton, QuickPickItem, Tab, TabGroup, TextDocument, TextDocumentShowOptions,
+  TextEditor, Uri as VscodeUri, ViewColumn as VscodeColumn
+} from 'vscode';
 
 export class EventEmitter<T> {
   private readonly listeners = new Set<(event: T) => unknown>();
@@ -27,16 +30,32 @@ export class Uri {
 }
 export class RelativePattern { constructor(readonly base: unknown, readonly pattern: string) {} }
 export class Range {
-  constructor(readonly startLine: number, readonly startCharacter: number, readonly endLine: number, readonly endCharacter: number) {}
+  readonly start: { line: number; character: number };
+  readonly end: { line: number; character: number };
+  constructor(readonly startLine: number, readonly startCharacter: number, readonly endLine: number, readonly endCharacter: number) {
+    this.start = { line: startLine, character: startCharacter };
+    this.end = { line: endLine, character: endCharacter };
+  }
 }
+export class Selection extends Range {}
+export const TextEditorRevealType = { AtTop: 1, InCenter: 2 };
 export const ViewColumn = { One: 1, Beside: -2 };
+export class ThemeIcon { constructor(readonly id: string) {} }
 export const fileCreated = new EventEmitter<void>();
 export const fileDeleted = new EventEmitter<void>();
 export const foldersChanged = new EventEmitter<void>();
 export const configurationChanged = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
+export const tabsChanged = new EventEmitter<void>();
 export const workspace = {
   workspaceFolders: [{ uri: Uri.parse('file:///workspace'), name: 'workspace', index: 0 }],
-  textDocuments: [] as Pick<TextDocument, 'uri' | 'isDirty' | 'lineCount' | 'getText'>[],
+  textDocuments: [] as TextDocument[],
+  openTextDocument: vi.fn(async (uri: VscodeUri): Promise<TextDocument> => {
+    const existing = workspace.textDocuments.find(document => !document.isClosed && document.uri.toString() === uri.toString());
+    if (existing) return existing;
+    const document = createDocument(uri);
+    workspace.textDocuments.push(document);
+    return document;
+  }),
   createFileSystemWatcher: () => ({
     onDidCreate: fileCreated.event, onDidDelete: fileDeleted.event, dispose: vi.fn()
   }),
@@ -54,28 +73,124 @@ export const workspace = {
     readFile: vi.fn<() => Promise<Uint8Array>>(async () => new TextEncoder().encode('int main() { return 0; }'))
   }
 };
-export class MockPanel {
-  active = true;
-  private readonly disposed = new EventEmitter<void>();
-  private readonly viewState = new EventEmitter<{ webviewPanel: MockPanel }>();
-  private readonly received = new EventEmitter<unknown>();
-  readonly webview = {
-    html: '', cspSource: 'vscode-webview:',
-    postMessage: vi.fn(async (_message: unknown) => true),
-    asWebviewUri: (uri: Uri) => uri,
-    onDidReceiveMessage: this.received.event
-  };
-  onDidDispose = this.disposed.event;
-  onDidChangeViewState = this.viewState.event;
-  reveal = vi.fn();
-  dispose(): void { this.disposed.fire(); }
-  receive(message: unknown): void { this.received.fire(message); }
-  deactivate(): void { this.active = false; this.viewState.fire({ webviewPanel: this }); }
+type MockItem = QuickPickItem & { id?: string; path?: string };
+export class MockQuickPick {
+  title = '';
+  placeholder = '';
+  ignoreFocusOut = false;
+  matchOnDescription = false;
+  keepScrollPosition = false;
+  enabled = true;
+  busy = false;
+  items: readonly MockItem[] = [];
+  buttons: readonly QuickInputButton[] = [];
+  private currentValue = '';
+  private active: readonly MockItem[] = [];
+  private readonly valueChanged = new EventEmitter<string>();
+  private readonly activeChanged = new EventEmitter<readonly MockItem[]>();
+  private readonly accepted = new EventEmitter<void>();
+  private readonly hidden = new EventEmitter<void>();
+  private readonly itemButton = new EventEmitter<{ item: MockItem }>();
+  private readonly button = new EventEmitter<void>();
+  onDidChangeValue = this.valueChanged.event;
+  onDidChangeActive = this.activeChanged.event;
+  onDidAccept = this.accepted.event;
+  onDidHide = this.hidden.event;
+  onDidTriggerItemButton = this.itemButton.event;
+  onDidTriggerButton = this.button.event;
+  get value(): string { return this.currentValue; }
+  set value(value: string) { this.currentValue = value; this.valueChanged.fire(value); }
+  get activeItems(): readonly MockItem[] { return this.active; }
+  set activeItems(items: readonly MockItem[]) { this.active = items; this.activeChanged.fire(items); }
+  show = vi.fn();
+  dispose = vi.fn();
+  hide(): void { this.hidden.fire(); }
+  accept(): void { this.accepted.fire(); }
+  split(item: MockItem): void { this.itemButton.fire({ item }); }
+  preview(): void { this.button.fire(); }
 }
 export const window = {
-  activeTextEditor: undefined as { document: { isClosed: boolean }; viewColumn: number } | undefined,
-  createWebviewPanel: vi.fn(() => new MockPanel()),
-  showTextDocument: vi.fn(async (_uri: unknown, _options: unknown) => undefined),
+  activeTextEditor: undefined as TextEditor | undefined,
+  createWebviewPanel: vi.fn(),
+  createQuickPick: vi.fn(() => new MockQuickPick()),
+  tabGroups: {
+    all: [] as MockGroup[],
+    onDidChangeTabs: tabsChanged.event,
+    get activeTabGroup(): MockGroup {
+      const group = this.all.find(candidate => candidate.isActive) ?? this.all[0];
+      if (!group) throw new Error('No mock editor group');
+      return group;
+    },
+    close: vi.fn(async (tabs: readonly Tab[], _preserveFocus?: boolean) => {
+      for (const group of window.tabGroups.all) {
+        group.tabs = group.tabs.filter(tab => !tabs.includes(tab));
+        if (group.activeTab && tabs.includes(group.activeTab)) group.activeTab = group.tabs[0];
+      }
+      return true;
+    })
+  },
+  showTextDocument: vi.fn(async (
+    documentOrUri: TextDocument | VscodeUri, options: TextDocumentShowOptions
+  ): Promise<TextEditor> => {
+    const document = 'getText' in documentOrUri ? documentOrUri : await workspace.openTextDocument(documentOrUri);
+    if (!workspace.textDocuments.includes(document)) workspace.textDocuments.push(document);
+    const column = options.viewColumn === ViewColumn.Beside
+      ? window.tabGroups.activeTabGroup.viewColumn + 1 : options.viewColumn ?? 1;
+    let group = window.tabGroups.all.find(candidate => candidate.viewColumn === column);
+    if (!group) { group = new MockGroup(column); window.tabGroups.all.push(group); }
+    let tab = group.tabs.find(candidate => candidate.input.uri.toString() === document.uri.toString());
+    if (!tab) {
+      if (options.preview && editorSettings.previewEnabled) group.tabs = group.tabs.filter(candidate => !candidate.isPreview || candidate.isDirty);
+      tab = new MockTab(document, group, Boolean(options.preview && editorSettings.previewEnabled));
+      group.tabs.push(tab);
+    } else if (options.preview === false) tab.isPreview = false;
+    group.activeTab = tab;
+    for (const candidate of window.tabGroups.all) candidate.isActive = candidate === group;
+    const editor = createEditor(document, column);
+    window.activeTextEditor = editor;
+    return editor;
+  }),
   showErrorMessage: vi.fn(async (_message: string) => undefined)
 };
-export const commands = { executeCommand: vi.fn(async (_command: string) => undefined) };
+export const commands = { executeCommand: vi.fn(async (_command: string, ..._args: unknown[]) => undefined) };
+
+export class TabInputText { constructor(readonly uri: VscodeUri) {} }
+export class MockGroup implements TabGroup {
+  isActive = true;
+  activeTab: MockTab | undefined;
+  tabs: MockTab[] = [];
+  constructor(readonly viewColumn: VscodeColumn) {}
+}
+export class MockTab implements Tab {
+  readonly input: TabInputText;
+  readonly label: string;
+  isActive = true;
+  isPinned = false;
+  get isDirty(): boolean { return this.document.isDirty; }
+  constructor(readonly document: TextDocument, readonly group: MockGroup, public isPreview: boolean) {
+    this.input = new TabInputText(document.uri);
+    this.label = document.uri.path;
+  }
+}
+export const editorSettings = { previewEnabled: true };
+
+export function createDocument(uri: VscodeUri, dirty = false): TextDocument {
+  const document: Pick<TextDocument, 'uri' | 'isDirty' | 'isClosed' | 'getText'> = {
+    uri, isDirty: dirty, isClosed: false, getText: () => 'const unsaved = 1;'
+  };
+  return document as TextDocument;
+}
+
+export function createEditor(document: TextDocument, column: VscodeColumn = 1): TextEditor {
+  const editor: Pick<TextEditor, 'document' | 'viewColumn' | 'selections' | 'visibleRanges' | 'revealRange'> = {
+    document, viewColumn: column, selections: [], visibleRanges: [], revealRange: vi.fn()
+  };
+  return editor as TextEditor;
+}
+
+export function resetEditors(): void {
+  window.activeTextEditor = undefined;
+  window.tabGroups.all = [new MockGroup(1)];
+  workspace.textDocuments = [];
+  editorSettings.previewEnabled = true;
+}

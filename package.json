@@ -1,8 +1,8 @@
 {
   "name": "telescope-picker",
   "displayName": "Telescope Picker",
-  "description": "A keyboard-first workspace file picker with a native-themed results and preview webview.",
-  "version": "0.1.1",
+  "description": "A native fuzzy file popup with live previews in the current code editor.",
+  "version": "0.3.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -35,14 +35,60 @@
         "command": "telescopePicker.resume",
         "title": "Resume Picker",
         "category": "Telescope Picker"
+      },
+      {
+        "command": "telescopePicker.openBeside",
+        "title": "Open Selection Beside",
+        "category": "Telescope Picker",
+        "enablement": "telescopePicker.active"
+      },
+      {
+        "command": "telescopePicker.next",
+        "title": "Next Result",
+        "category": "Telescope Picker",
+        "enablement": "telescopePicker.active"
+      },
+      {
+        "command": "telescopePicker.previous",
+        "title": "Previous Result",
+        "category": "Telescope Picker",
+        "enablement": "telescopePicker.active"
       }
     ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "telescopePicker.next",
+          "when": "false"
+        },
+        {
+          "command": "telescopePicker.previous",
+          "when": "false"
+        }
+      ]
+    },
     "keybindings": [
       {
         "command": "telescopePicker.files",
         "key": "ctrl+alt+p",
         "mac": "cmd+alt+p",
         "when": "!terminalFocus"
+      },
+      {
+        "command": "telescopePicker.openBeside",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "inQuickOpen && telescopePicker.active"
+      },
+      {
+        "command": "telescopePicker.next",
+        "key": "ctrl+j",
+        "when": "inQuickOpen && telescopePicker.active && config.telescopePicker.vimNavigation"
+      },
+      {
+        "command": "telescopePicker.previous",
+        "key": "ctrl+k",
+        "when": "inQuickOpen && telescopePicker.active && config.telescopePicker.vimNavigation"
       }
     ],
     "configuration": {
@@ -63,13 +109,11 @@
     "test": "vitest run",
     "test:host": "npm run build && node scripts/test-host.mjs",
     "benchmark": "tsx scripts/benchmark.ts",
-    "preview": "tsx scripts/preview.mts",
     "vscode:prepublish": "npm run typecheck && npm run build",
     "package": "vsce package --allow-missing-repository"
   },
   "dependencies": {
-    "fuzzysort": "^4.0.2",
-    "highlight.js": "^11.12.0"
+    "fuzzysort": "^4.0.2"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -77,7 +121,6 @@
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.25.0",
-    "jsdom": "^26.0.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
     "vitest": "^4.0.0"

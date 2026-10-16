@@ -2,7 +2,6 @@ import * as esbuild from 'esbuild';
 
 const builds = [
   { entryPoints: ['src/extension.ts'], outfile: 'dist/extension.js', platform: 'node', format: 'cjs', external: ['vscode'] },
-  { entryPoints: ['src/webview/main.ts'], outfile: 'dist/webview.js', platform: 'browser', format: 'iife' },
   { entryPoints: ['test/host/index.ts'], outfile: 'dist/test/host.js', platform: 'node', format: 'cjs', external: ['vscode'] }
 ];
 for (const build of builds) {

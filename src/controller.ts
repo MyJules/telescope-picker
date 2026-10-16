@@ -1,12 +1,16 @@
 import * as vscode from 'vscode';
 import { FileProvider } from './files';
 import { LatestRequest } from './latest';
-import { pickerHtml } from './html';
-import { PreviewService } from './preview';
-import { parseClientMessage, type HostMessage, type ResultItem } from './protocol';
+import { EditorPreview } from './editorPreview';
 import { rankFiles } from './ranking';
 
 interface ResumeState { query: string; selectedId?: string }
+interface FileItem extends vscode.QuickPickItem { id?: string; path?: string }
+interface Session {
+  picker: vscode.QuickPick<FileItem>;
+  accept(beside: boolean, item?: FileItem): Promise<void>;
+  close(restoreFocus: boolean): void;
+}
 
 function savedState(value: unknown): ResumeState {
   if (typeof value !== 'object' || value === null) return { query: '' };
@@ -16,197 +20,177 @@ function savedState(value: unknown): ResumeState {
 }
 
 export class PickerController implements vscode.Disposable {
-  private panel: vscode.WebviewPanel | undefined;
+  private session: Session | undefined;
   private readonly files = new FileProvider();
-  private readonly preview = new PreviewService();
   private resume: ResumeState;
+  private finishing: Promise<void> = Promise.resolve();
 
   constructor(
-    private readonly context: Pick<vscode.ExtensionContext, 'extensionUri' | 'workspaceState'>,
+    private readonly context: Pick<vscode.ExtensionContext, 'workspaceState'>,
     private readonly output: Pick<vscode.OutputChannel, 'appendLine'>
   ) {
     this.resume = savedState(context.workspaceState.get('resume'));
   }
 
-  show(resume = false): void {
-    if (this.panel) {
-      this.panel.reveal();
-      void this.panel.webview.postMessage({ type: 'focus' } satisfies HostMessage);
-      return;
-    }
+  async show(resume = false): Promise<void> {
+    await this.finishing;
+    if (this.session) { this.session.picker.show(); return; }
     const previous = vscode.window.activeTextEditor;
-    const previousColumn = previous?.viewColumn ?? vscode.ViewColumn.One;
-    const panel = vscode.window.createWebviewPanel('telescopePicker', 'Find Files', previousColumn, {
-      enableScripts: true,
-      retainContextWhenHidden: true,
-      localResourceRoots: [
-        vscode.Uri.joinPath(this.context.extensionUri, 'dist'),
-        vscode.Uri.joinPath(this.context.extensionUri, 'media')
-      ]
-    });
-    this.panel = panel;
-    let state: ResumeState = resume ? { ...this.resume } : { query: '' };
-    let disposed = false;
-    let restoreOnClose = true;
-    let wasActive = true;
-    let opening = false;
-    let lastQueryId = -1;
-    let lastPreviewId = -1;
-    let visible = new Map<string, ResultItem>();
-    const queryRequests = new LatestRequest();
-    const previewRequests = new LatestRequest();
-    let previewCancellation: vscode.CancellationTokenSource | undefined;
+    const column = previous?.viewColumn ?? vscode.ViewColumn.One;
+    const picker = vscode.window.createQuickPick<FileItem>();
+    const state: ResumeState = resume ? { ...this.resume } : { query: '' };
+    const requests = new LatestRequest();
     const subscriptions: vscode.Disposable[] = [];
+    const splitButton: vscode.QuickInputButton = {
+      iconPath: new vscode.ThemeIcon('split-horizontal'), tooltip: 'Open beside (Ctrl/Cmd+Enter)'
+    };
+    let closed = false;
+    let accepted = false;
+    let opening = false;
+    let visible = new Map<string, FileItem>();
+    picker.title = 'Telescope Picker';
+    picker.placeholder = 'Find files · Enter Open · Ctrl/Cmd+Enter Split · Esc Close';
+    picker.ignoreFocusOut = true;
+    picker.matchOnDescription = false;
+    picker.keepScrollPosition = true;
+    picker.value = state.query;
 
-    const post = (message: HostMessage): void => {
-      if (!disposed) void panel.webview.postMessage(message);
-    };
-    const error = (scope: 'files' | 'preview' | 'protocol' | 'open', reason: unknown, requestId?: number): void => {
+    const report = (reason: unknown): string => {
       const message = reason instanceof Error ? reason.message : String(reason);
-      this.output.appendLine(`[${scope}] ${message}`);
-      post({ type: 'error', scope, message, requestId });
+      this.output.appendLine(message);
+      return message;
     };
-    const cancelPreview = (): void => {
-      previewRequests.cancel();
-      previewCancellation?.cancel();
-      previewCancellation?.dispose();
-      previewCancellation = undefined;
-    };
-    const restorePrevious = async (): Promise<void> => {
-      if (previous && !previous.document.isClosed) {
-        await vscode.window.showTextDocument(previous.document, {
-          viewColumn: previousColumn, preserveFocus: false
-        });
-      } else {
-        await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
-      }
-    };
-    const search = async (query: string, requestId: number): Promise<void> => {
-      const generation = queryRequests.next();
-      cancelPreview();
+    const preview = new EditorPreview(previous, column, reason => {
+      const message = report(reason);
+      if (!closed) picker.title = `Could not preview file: ${message}`;
+    });
+    const status = (message: string): void => {
       visible.clear();
-      post({ type: 'loading', requestId });
+      picker.items = [{ label: message, alwaysShow: true }];
+      picker.activeItems = [];
+    };
+    const select = (item: FileItem | undefined): void => {
+      if (closed || !item?.id || visible.get(item.id) !== item) return;
+      state.selectedId = item.id;
+      preview.select(item.id);
+    };
+    const search = async (query: string): Promise<void> => {
+      state.query = query;
+      const generation = requests.next();
+      preview.suspend();
+      picker.busy = true;
+      status('Loading workspace files...');
       try {
+        if (query.length > 1024) throw new Error('Queries are limited to 1,024 characters.');
         if (!vscode.workspace.workspaceFolders?.length) throw new Error('Open a folder or workspace to find files.');
         const indexed = await this.files.getFiles();
-        if (disposed || !queryRequests.isCurrent(generation)) return;
+        if (closed || !requests.isCurrent(generation)) return;
         const ranked = rankFiles(indexed.files, query);
-        visible = new Map(ranked.items.map(item => [item.id, item]));
-        post({ type: 'results', requestId, ...ranked, indexTruncated: indexed.truncated });
+        const items: FileItem[] = ranked.items.map(file => ({
+          id: file.id, path: file.path, label: file.path, description: file.root,
+          iconPath: new vscode.ThemeIcon('file'), alwaysShow: true, buttons: [splitButton]
+        }));
+        visible = new Map(items.flatMap(item => item.id ? [[item.id, item] as const] : []));
+        picker.title = `Telescope Picker · ${ranked.total} results`
+          + (ranked.truncated ? ` (showing ${items.length})` : '')
+          + (indexed.truncated ? ' · Index limited to 100,000 files' : '');
+        if (!items.length) status(query.trim() ? 'No matching files.' : 'No workspace files found.');
+        else {
+          picker.items = items;
+          const active = items.find(item => item.id === state.selectedId) ?? items[0];
+          picker.activeItems = active ? [active] : [];
+          select(active);
+        }
       } catch (reason) {
-        if (!disposed && queryRequests.isCurrent(generation) && !(reason instanceof vscode.CancellationError))
-          error('files', reason, requestId);
+        if (!closed && requests.isCurrent(generation) && !(reason instanceof vscode.CancellationError)) {
+          status(`Error: ${report(reason)}`);
+        }
+      } finally {
+        if (!closed && requests.isCurrent(generation)) picker.busy = false;
       }
     };
-    subscriptions.push(
-      panel.onDidChangeViewState(event => { wasActive = event.webviewPanel.active; }),
-      this.files.onDidChange(() => {
-        queryRequests.cancel();
-        cancelPreview();
-        visible.clear();
-        post({ type: 'refresh', workspace: workspaceLabel() });
-      }),
-      panel.webview.onDidReceiveMessage(async (raw: unknown) => {
-        const message = parseClientMessage(raw);
-        if (!message) { error('protocol', new Error('Invalid picker request.')); return; }
-        switch (message.type) {
-          case 'ready':
-            post({ type: 'init', ...state, workspace: workspaceLabel(), vimNavigation: vimNavigation() });
-            break;
-          case 'query':
-            if (message.requestId <= lastQueryId) return;
-            lastQueryId = message.requestId;
-            state.query = message.query;
-            await search(message.query, message.requestId);
-            break;
-          case 'select': {
-            if (message.requestId <= lastPreviewId) return;
-            lastPreviewId = message.requestId;
-            if (!visible.has(message.id)) { error('preview', new Error('This result is no longer available.'), message.requestId); return; }
-            state.selectedId = message.id;
-            cancelPreview();
-            const generation = previewRequests.next();
-            const cancellation = new vscode.CancellationTokenSource();
-            previewCancellation = cancellation;
-            try {
-              await new Promise<void>(resolve => {
-                let listener: vscode.Disposable | undefined;
-                const timer = setTimeout(() => { listener?.dispose(); resolve(); }, 35);
-                listener = cancellation.token.onCancellationRequested(() => {
-                  clearTimeout(timer);
-                  listener?.dispose();
-                  resolve();
-                });
-              });
-              if (cancellation.token.isCancellationRequested) return;
-              const preview = await this.preview.load(vscode.Uri.parse(message.id), cancellation.token);
-              if (!disposed && previewRequests.isCurrent(generation))
-                post({ type: 'preview', requestId: message.requestId, id: message.id, ...preview });
-            } catch (reason) {
-              if (!disposed && previewRequests.isCurrent(generation) && !(reason instanceof vscode.CancellationError))
-                error('preview', reason, message.requestId);
-            } finally {
-              if (previewCancellation === cancellation) {
-                cancellation.dispose();
-                previewCancellation = undefined;
-              }
-            }
-            break;
-          }
-          case 'accept': {
-            if (opening) return;
-            if (!visible.has(message.id)) { error('open', new Error('This result is no longer available.')); return; }
-            opening = true;
-            state.selectedId = message.id;
-            try {
-              await vscode.window.showTextDocument(vscode.Uri.parse(message.id), {
-                viewColumn: message.beside ? vscode.ViewColumn.Beside : previousColumn,
-                preserveFocus: false, preview: false
-              });
-              if (!disposed) { restoreOnClose = false; panel.dispose(); }
-            } catch (reason) {
-              error('open', reason);
-              opening = false;
-            }
-            break;
-          }
-          case 'close': panel.dispose(); break;
+    const close = (restoreFocus: boolean): void => {
+      if (closed) return;
+      closed = true;
+      this.session = undefined;
+      requests.cancel();
+      this.files.cancel();
+      if (!accepted) this.finishing = preview.finish(restoreFocus).catch(reason => {
+        report(reason);
+        void vscode.window.showErrorMessage('Telescope Picker could not restore the original editor. See output for details.');
+      });
+      this.resume = { ...state };
+      subscriptions.forEach(subscription => subscription.dispose());
+      picker.dispose();
+      void vscode.commands.executeCommand('setContext', 'telescopePicker.active', false).then(undefined, reason => {
+        report(reason);
+        void vscode.window.showErrorMessage('Telescope Picker could not reset its keyboard context.');
+      });
+      void this.context.workspaceState.update('resume', this.resume).then(undefined, reason => {
+        report(reason);
+        void vscode.window.showErrorMessage('Telescope Picker could not save its resume state.');
+      });
+    };
+    const accept = async (beside: boolean, candidate?: FileItem): Promise<void> => {
+      if (closed || opening) return;
+      const item = candidate ?? picker.activeItems[0];
+      if (!item?.id || visible.get(item.id) !== item) return;
+      opening = true;
+      picker.enabled = false;
+      state.selectedId = item.id;
+      try {
+        await preview.accept(vscode.Uri.parse(item.id), beside);
+        if (closed) return;
+        accepted = true;
+        close(false);
+      } catch (reason) {
+        if (!closed) {
+          picker.title = `Could not open file: ${report(reason)}`;
+          picker.enabled = true;
+          opening = false;
+          picker.show();
         }
-      }),
-      panel.onDidDispose(() => {
-        disposed = true;
-        if (this.panel === panel) this.panel = undefined;
-        queryRequests.cancel();
-        cancelPreview();
-        this.files.cancel();
-        this.resume = { ...state };
-        void this.context.workspaceState.update('resume', this.resume).then(undefined, reason => {
-          this.output.appendLine(`Could not save picker state: ${String(reason)}`);
-          void vscode.window.showErrorMessage('Telescope Picker could not save its resume state. See output for details.');
-        });
-        subscriptions.forEach(subscription => subscription.dispose());
-        if (restoreOnClose && wasActive) void restorePrevious().catch(reason => {
-          this.output.appendLine(`Could not restore editor focus: ${String(reason)}`);
-          void vscode.window.showErrorMessage('Telescope Picker could not restore the previous editor.');
-        });
-      })
+      }
+    };
+    const session: Session = { picker, accept, close };
+    this.session = session;
+    subscriptions.push(
+      picker.onDidChangeValue(query => { void search(query); }),
+      picker.onDidChangeActive(items => select(items[0])),
+      picker.onDidAccept(() => { void accept(false); }),
+      picker.onDidTriggerItemButton(event => { void accept(true, event.item); }),
+      picker.onDidHide(() => close(true)),
+      this.files.onDidChange(() => { void search(picker.value); })
     );
-    panel.webview.html = pickerHtml({
-      script: panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.js')).toString(),
-      style: panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'picker.css')).toString(),
-      cspSource: panel.webview.cspSource
-    });
+    picker.show();
+    const searchReady = search(state.query);
+    try {
+      await vscode.commands.executeCommand('setContext', 'telescopePicker.active', true);
+      if (closed) return;
+      await searchReady;
+      if (!closed) picker.show();
+    } catch (reason) {
+      if (!closed) {
+        report(reason);
+        void vscode.window.showErrorMessage('Could not initialize picker keyboard controls. The file popup is still available.');
+        picker.show();
+      }
+    }
+  }
+
+  async openBeside(): Promise<void> { await this.session?.accept(true); }
+
+  navigate(direction: number): void {
+    const picker = this.session?.picker;
+    if (!picker) return;
+    const items = picker.items.filter(item => item.id);
+    const current = items.indexOf(picker.activeItems[0] ?? { label: '' });
+    const next = items[Math.max(0, Math.min(items.length - 1, current + direction))];
+    if (next) picker.activeItems = [next];
   }
 
   dispose(): void {
-    this.panel?.dispose();
+    this.session?.close(false);
     this.files.dispose();
   }
-}
-
-function workspaceLabel(): string {
-  return vscode.workspace.workspaceFolders?.map(folder => folder.name).join(' / ') ?? 'No workspace';
-}
-function vimNavigation(): boolean {
-  return vscode.workspace.getConfiguration('telescopePicker').get<boolean>('vimNavigation', false);
 }

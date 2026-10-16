@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { PickerController } from '../src/controller';
-import type { HostMessage } from '../src/protocol';
-import { MockPanel, window, workspace, Uri } from './vscode';
+import { commands, createDocument, fileCreated, MockQuickPick, resetEditors, window, workspace, Uri } from './vscode';
 
 class State implements vscode.Memento {
   readonly saved: unknown[] = [];
@@ -13,89 +12,103 @@ class State implements vscode.Memento {
   async update(_key: string, value: unknown): Promise<void> { this.saved.push(value); }
 }
 let controller: PickerController;
-let panel: MockPanel;
+let picker: MockQuickPick;
 let state: State;
+let original: vscode.TextEditor;
 const log = vi.fn();
-const messages = (): HostMessage[] => panel.webview.postMessage.mock.calls.map(call => call[0]).filter(
-  (message): message is HostMessage => typeof message === 'object' && message !== null && 'type' in message);
 const waitResults = async (): Promise<void> => {
-  await vi.waitFor(() => expect(messages().some(message => message.type === 'results')).toBe(true));
+  await vi.waitFor(() => expect(picker.items[0]?.id).toBe('file:///workspace/src/main.cpp'));
 };
-beforeEach(() => {
-  workspace.textDocuments = [];
-  workspace.findFiles.mockResolvedValue([Uri.parse('file:///workspace/src/main.cpp')]);
+
+beforeEach(async () => {
+  resetEditors();
+  workspace.workspaceFolders = [{ uri: Uri.parse('file:///workspace'), name: 'workspace', index: 0 }];
+  workspace.findFiles.mockResolvedValue([
+    Uri.parse('file:///workspace/src/main.cpp'), Uri.parse('file:///workspace/src/other.cpp')
+  ]);
   workspace.fs.stat.mockResolvedValue({ size: 20 });
-  workspace.fs.readFile.mockResolvedValue(new TextEncoder().encode('int main() {}'));
-  window.activeTextEditor = { document: { isClosed: false }, viewColumn: 1 };
+  const document = createDocument(vscode.Uri.parse('file:///workspace/original.ts'), true);
+  workspace.textDocuments.push(document);
+  original = await window.showTextDocument(document, { viewColumn: 1, preview: false });
+  window.showTextDocument.mockClear();
   state = new State();
-  controller = new PickerController({ extensionUri: vscode.Uri.parse('file:///extension'), workspaceState: state }, { appendLine: log });
-  controller.show();
-  panel = window.createWebviewPanel.mock.results.at(-1)?.value ?? new MockPanel();
+  controller = new PickerController({ workspaceState: state }, { appendLine: log });
+  await controller.show();
+  picker = window.createQuickPick.mock.results.at(-1)?.value ?? new MockQuickPick();
 });
 afterEach(() => controller.dispose());
 
-it('reuses its panel and restores the original editor on Escape', async () => {
-  controller.show();
-  expect(window.createWebviewPanel).toHaveBeenCalledTimes(1);
-  expect(panel.reveal).toHaveBeenCalled();
-  panel.receive({ type: 'close' });
+it('uses a native popup without creating or focusing a preview panel', async () => {
+  await controller.show();
+  expect(window.createQuickPick).toHaveBeenCalledTimes(1);
+  expect(window.createWebviewPanel).not.toHaveBeenCalled();
+  expect(commands.executeCommand.mock.calls.some(call => call[0].includes('preview'))).toBe(false);
+  expect(picker.ignoreFocusOut).toBe(true);
+});
+it('previews in the original editor while preserving popup focus', async () => {
   await vi.waitFor(() => expect(window.showTextDocument).toHaveBeenCalledWith(
-    window.activeTextEditor?.document, { viewColumn: 1, preserveFocus: false }));
-  expect(state.saved).toEqual([{ query: '' }]);
+    expect.objectContaining({ uri: expect.anything() }), { viewColumn: 1, preserveFocus: true, preview: true }));
+  expect(window.activeTextEditor?.document.uri.toString()).toBe('file:///workspace/src/main.cpp');
 });
-it('previews without opening tabs, then accepts beside without focus restoration', async () => {
-  panel.receive({ type: 'query', query: 'main', requestId: 1 });
-  await waitResults();
-  panel.receive({ type: 'select', id: 'file:///workspace/src/main.cpp', requestId: 1 });
-  await vi.waitFor(() => expect(messages().some(message => message.type === 'preview')).toBe(true));
+it('restores the original document and saves resume state on Escape', async () => {
+  picker.hide();
+  await vi.waitFor(() => expect(window.activeTextEditor?.document).toBe(original.document));
+  expect(commands.executeCommand).toHaveBeenCalledWith('setContext', 'telescopePicker.active', false);
+  expect(state.saved).toEqual([{ query: '', selectedId: 'file:///workspace/src/main.cpp' }]);
+  expect(original.document.isDirty).toBe(true);
+});
+it('accepts beside and restores the original file on the left', async () => {
+  await controller.openBeside();
+  expect(window.showTextDocument).toHaveBeenLastCalledWith(
+    expect.objectContaining({ toString: expect.any(Function) }), { viewColumn: -2, preserveFocus: false, preview: false });
+  expect(window.tabGroups.all[0]?.activeTab?.document).toBe(original.document);
+  expect(window.activeTextEditor?.viewColumn).toBe(2);
+});
+it('supports ordinary acceptance and the per-item split button', async () => {
+  const item = picker.items[1];
+  if (!item) throw new Error('Expected second file');
+  picker.split(item);
+  await vi.waitFor(() => expect(picker.dispose).toHaveBeenCalled());
+  expect(window.activeTextEditor?.document.uri.toString()).toBe(item.id);
+  expect(window.activeTextEditor?.viewColumn).toBe(2);
+});
+it('only opens items from the current result set', async () => {
+  picker.activeItems = [{ label: 'private', id: 'file:///private/secret' }];
+  await controller.openBeside();
   expect(window.showTextDocument).not.toHaveBeenCalled();
-  panel.receive({ type: 'accept', id: 'file:///workspace/src/main.cpp', beside: true });
-  await vi.waitFor(() => expect(state.saved.length).toBe(1));
-  expect(window.showTextDocument).toHaveBeenCalledTimes(1);
-  expect(window.showTextDocument.mock.calls[0]?.[1]).toEqual({ viewColumn: -2, preserveFocus: false, preview: false });
 });
-it('does not permit URIs outside visible results', () => {
-  panel.receive({ type: 'accept', id: 'file:///private/secret', beside: false });
-  expect(window.showTextDocument).not.toHaveBeenCalled();
-  expect(messages().at(-1)).toMatchObject({ type: 'error', scope: 'open' });
-});
-it('keeps the latest query and cancels stale previews and work on close', async () => {
-  panel.receive({ type: 'query', query: 'obsolete', requestId: 1 });
-  panel.receive({ type: 'query', query: 'main', requestId: 2 });
+it('drops stale query results and preserves newer input during invalidation', async () => {
+  picker.value = 'obsolete';
+  picker.value = 'main';
   await waitResults();
-  expect(messages().filter(message => message.type === 'results').map(message => message.requestId)).toEqual([2]);
-  let resolve: (bytes: Uint8Array) => void = () => { throw new Error('No pending preview'); };
-  workspace.fs.readFile.mockImplementationOnce(() => new Promise<Uint8Array>(done => { resolve = done; }));
-  panel.receive({ type: 'select', id: 'file:///workspace/src/main.cpp', requestId: 1 });
-  await vi.waitFor(() => expect(workspace.fs.readFile).toHaveBeenCalled());
-  panel.receive({ type: 'query', query: 'missing', requestId: 3 });
-  resolve(new TextEncoder().encode('obsolete preview'));
-  await new Promise(done => setTimeout(done, 0));
-  expect(messages().some(message => message.type === 'preview')).toBe(false);
-  panel.receive({ type: 'close' });
-  const count = panel.webview.postMessage.mock.calls.length;
-  await new Promise(done => setTimeout(done, 0));
-  expect(panel.webview.postMessage).toHaveBeenCalledTimes(count);
-});
-it('resumes the last query and selection', async () => {
-  panel.receive({ type: 'query', query: 'main', requestId: 1 });
+  expect(picker.items).toHaveLength(1);
+  fileCreated.fire();
   await waitResults();
-  panel.receive({ type: 'select', id: 'file:///workspace/src/main.cpp', requestId: 1 });
-  panel.receive({ type: 'close' });
-  controller.show(true);
-  panel = window.createWebviewPanel.mock.results.at(-1)?.value ?? new MockPanel();
-  panel.receive({ type: 'ready' });
-  expect(messages().at(-1)).toMatchObject({ type: 'init', query: 'main', selectedId: 'file:///workspace/src/main.cpp' });
-  expect(workspace.fs.readFile).not.toHaveBeenCalled();
+  expect(picker.value).toBe('main');
 });
-it('surfaces file and opening failures and leaves the picker usable', async () => {
+it('resumes the last query and selection before a preview has loaded', async () => {
+  picker.value = 'other';
+  await vi.waitFor(() => expect(picker.items[0]?.id).toBe('file:///workspace/src/other.cpp'));
+  picker.hide();
+  await controller.show(true);
+  picker = window.createQuickPick.mock.results.at(-1)?.value ?? new MockQuickPick();
+  expect(picker.activeItems[0]?.id).toBe('file:///workspace/src/other.cpp');
+  expect(picker.value).toBe('other');
+});
+it('supports Vim-style navigation', () => {
+  controller.navigate(1);
+  expect(picker.activeItems[0]?.id).toBe('file:///workspace/src/other.cpp');
+  controller.navigate(-1);
+  expect(picker.activeItems[0]?.id).toBe('file:///workspace/src/main.cpp');
+});
+it('surfaces discovery and opening failures without losing the popup', async () => {
   workspace.findFiles.mockRejectedValueOnce(new Error('Discovery unavailable'));
-  panel.receive({ type: 'query', query: '', requestId: 1 });
-  await vi.waitFor(() => expect(messages().at(-1)).toMatchObject({ type: 'error', scope: 'files', message: 'Discovery unavailable' }));
-  panel.receive({ type: 'query', query: '', requestId: 2 });
+  fileCreated.fire();
+  await vi.waitFor(() => expect(picker.items[0]?.label).toContain('Discovery unavailable'));
+  picker.value = 'main';
   await waitResults();
   window.showTextDocument.mockRejectedValueOnce(new Error('File deleted'));
-  panel.receive({ type: 'accept', id: 'file:///workspace/src/main.cpp', beside: false });
-  await vi.waitFor(() => expect(messages().at(-1)).toMatchObject({ type: 'error', scope: 'open', message: 'File deleted' }));
-  expect(state.saved).toHaveLength(0);
+  picker.accept();
+  await vi.waitFor(() => expect(picker.title).toContain('File deleted'));
+  expect(picker.enabled).toBe(true);
 });
