@@ -9,7 +9,7 @@ the original editor group. There is no bottom preview panel or picker webview.
 
 Requires desktop VS Code 1.108 or newer for native file-icon theme support.
 
-1. Install the platform-matching VSIX (for example `jules-telescope-picker-win32-x64-0.11.5.vsix`)
+1. Install the platform-matching VSIX (for example `jules-telescope-picker-win32-x64-0.11.6.vsix`)
    using **Extensions: Install from VSIX**.
 2. Run **Developer: Reload Window** when updating an already-running version.
 3. Open a folder or multi-root workspace.
@@ -34,6 +34,8 @@ chat and other documents do not. An open text editor is required.
 Current-file matches follow ascending source line order, not relevance ranking.
 Each row uses the same file label with its line number and code excerpt alongside
 it, preventing native Quick Pick label ranking from reordering the matches.
+Search File Contents uses the same ascending line order when all results belong
+to a single file. Multi-file searches retain their existing native ranking.
 
 ## Browse Git changes
 

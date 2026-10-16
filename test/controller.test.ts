@@ -182,6 +182,23 @@ it('keeps current-file matches in ascending line order instead of ranking code l
   expect(picker.activeItems[0]?.id).toBe(contentItems()[1]?.id);
 });
 
+it('orders single-file workspace-content matches by line and preserves their code and root', async () => {
+  const document = createDocument(vscode.Uri.parse('file:///workspace/order.ts'), true,
+    'export function orderNeedle() {}\n// gap\norderNeedle\nconst orderNeedle = 1;');
+  workspace.textDocuments.push(document);
+  await controller.show(false, 'contents', 'orderNeedle');
+  expect(contentItems().map(item => item.description)).toEqual([
+    '1: export function orderNeedle() {} · workspace',
+    '3: orderNeedle · workspace',
+    '4: const orderNeedle = 1; · workspace'
+  ]);
+  expect(new Set(contentItems().map(item => item.label)).size).toBe(1);
+  expect(picker.matchOnDescription).toBe(false);
+  expect(picker.activeItems[0]?.id).toBe(contentItems()[0]?.id);
+  expect(controller.navigate(1)).toBe(true);
+  expect(picker.activeItems[0]?.id).toBe(contentItems()[1]?.id);
+});
+
 it('shows explicit current-file errors, empty and no-match states', async () => {
   await controller.show(false, 'currentFile');
   expect(picker.items[0]?.label).toBe('Type text to search in the current file.');
@@ -308,7 +325,7 @@ it('keeps whitespace matches explicit instead of deriving a filename label from 
   await controller.show(false, 'contents');
   picker.value = ' ';
   await vi.waitFor(() => expect(contentItems()).toHaveLength(1));
-  expect(contentItems()[0]?.label).toBe('(whitespace)');
+  expect(contentItems()[0]?.description).toContain('(whitespace)');
   expect(contentItems()[0]?.resourceUri?.toString()).toBe(uri.toString());
 });
 it('restores the original document and saves resume state on Escape', async () => {
@@ -467,13 +484,13 @@ it('debounces content queries and refreshes edited documents without accepting s
   picker.activeItems = stale ? [stale] : [];
   await controller.openBeside();
   expect(window.activeTextEditor?.viewColumn).not.toBe(2);
-  await vi.waitFor(() => expect(contentItems()[0]?.label).toContain('otherNeedle'));
+  await vi.waitFor(() => expect(contentItems()[0]?.description).toContain('otherNeedle'));
   expect(contentItems()).toHaveLength(1);
   const edited = workspace.textDocuments.find(document => document.uri.toString() === 'file:///workspace/src/main.cpp');
   if (!edited) throw new Error('Expected workspace document');
   documentChanged.fire({ document: edited, contentChanges: [{}] });
   expect(picker.items[0]?.id).toBeUndefined();
-  await vi.waitFor(() => expect(contentItems()[0]?.label).toContain('otherNeedle'));
+  await vi.waitFor(() => expect(contentItems()[0]?.description).toContain('otherNeedle'));
 });
 it('shows explicit content-query limits and cancels a pending scan when the popup closes', async () => {
   await contentMode('x'.repeat(1025));
@@ -717,5 +734,5 @@ it('groups repeated file matches and skips headings during navigation and accept
     await vi.waitFor(() => expect(contentItems()).toHaveLength(1));
     expect(picker.items[0]?.label).toBe('\\$(warning).cpp · \\$(error) (1)');
     expect(contentItems()[0]?.label).toContain('\\$(warning)');
-    expect(contentItems()[0]?.description).toBe('\\$(warning).cpp:1 · \\$(error)');
+    expect(contentItems()[0]?.description).toBe('1: const icon = "\\$(warning)"; · \\$(error)');
   });

@@ -54,6 +54,26 @@ export async function run(): Promise<void> {
     await until(() => vscode.window.activeTextEditor?.document === ordered
       && vscode.window.activeTextEditor.selection.start.line === 0, 'Current-file cancellation restores initial selection');
     await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+    const orderRoot = vscode.workspace.workspaceFolders?.[0];
+    assert.ok(orderRoot);
+    const orderPath = join(orderRoot.uri.fsPath, 'single-file-order.ts');
+    try {
+      await writeFile(orderPath, 'export function workspaceLineOrderNeedle() {}\n// gap\nworkspaceLineOrderNeedle\nconst workspaceLineOrderNeedle = 1;\n');
+      await vscode.commands.executeCommand('telescopePicker.searchContents', 'workspaceLineOrderNeedle');
+      await until(() => vscode.window.activeTextEditor?.document.uri.path.endsWith('/single-file-order.ts') === true
+        && vscode.window.activeTextEditor.selection.start.line === 0, 'Single-file workspace contents preview the earliest line');
+      await vscode.commands.executeCommand('workbench.action.quickOpenSelectNext');
+      await until(() => vscode.window.activeTextEditor?.selection.start.line === 2,
+        'Native Down in single-file workspace results follows source order');
+      await vscode.commands.executeCommand('workbench.action.quickOpenSelectNext');
+      await until(() => vscode.window.activeTextEditor?.selection.start.line === 3,
+        'Single-file workspace results reach the next source line');
+    } finally {
+      await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+      await vscode.commands.executeCommand('telescopePicker.files');
+      await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+      await rm(orderPath);
+    }
     await checkPicker();
     await checkGitDiffs();
     const commands = await vscode.commands.getCommands(true);

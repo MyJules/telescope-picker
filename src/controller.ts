@@ -186,6 +186,7 @@ export class PickerController implements vscode.Disposable {
         if (group) group.push(match);
         else groups.set(key, [match]);
       }
+      const lineOrdered = state.mode === 'currentFile' || state.mode === 'contents' && groups.size === 1;
       const items: FileItem[] = [];
       for (const matches of groups.values()) {
         const first = matches[0];
@@ -202,10 +203,10 @@ export class PickerController implements vscode.Disposable {
           items.push({
             id: match.id, uri: match.uri, path: match.path, location: match.location, diff: match.diff,
             resourceUri: vscode.Uri.parse(match.uri), iconPath: vscode.ThemeIcon.File,
-            label: state.mode === 'currentFile' ? literalLabel(first.path) : literalLabel(match.diff?.hunk
+            label: lineOrdered ? literalLabel(first.path) : literalLabel(match.diff?.hunk
               ?? `${match.diff ? match.diff.side === 'added' ? '+ ' : '- ' : ''}${start ? '...' : ''}${excerpt || '(whitespace)'}${start + 400 < text.length ? '...' : ''}`),
-            description: state.mode === 'currentFile'
-              ? `${match.location.line + 1}: ${literalLabel(`${start ? '...' : ''}${excerpt || '(whitespace)'}${start + 400 < text.length ? '...' : ''}`)}`
+            description: lineOrdered
+              ? `${match.location.line + 1}: ${literalLabel(`${start ? '...' : ''}${excerpt || '(whitespace)'}${start + 400 < text.length ? '...' : ''}`)}${state.mode === 'contents' ? ` · ${literalLabel(match.root)}` : ''}`
               : `${literalLabel(match.path)}${match.diff?.metadataOnly ? '' : `:${match.location.line + 1}`} · ${literalLabel(match.root)}`,
             alwaysShow: true, buttons: [splitButton]
           });
