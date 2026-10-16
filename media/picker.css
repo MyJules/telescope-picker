@@ -11,6 +11,7 @@ body {
   background: var(--vscode-editorWidget-background); border-radius: 6px; overflow: hidden;
 }
 header { display: flex; align-items: center; gap: 16px; padding: 12px 16px; }
+header, .search-label, input, footer, #error { flex-shrink: 0; }
 h1, h2 { font-size: 1em; margin: 0; font-weight: 600; }
 h1 { color: var(--vscode-textLink-foreground); }
 #workspace { flex: 1; color: var(--vscode-descriptionForeground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -24,8 +25,8 @@ input {
 }
 input::placeholder { color: var(--vscode-input-placeholderForeground); }
 :focus-visible, input:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
-.columns { display: grid; grid-template-columns: minmax(220px, 42%) minmax(0, 1fr); flex: 1; min-height: 0; border-top: 1px solid var(--vscode-panel-border); }
-.result-pane { overflow: auto; min-width: 0; }
+.columns { display: grid; grid-template-columns: minmax(220px, 42%) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); flex: 1; min-height: 0; overflow: hidden; border-top: 1px solid var(--vscode-panel-border); }
+.result-pane { overflow: auto; min-width: 0; min-height: 0; }
 #result-state { padding: 12px; color: var(--vscode-descriptionForeground); }
 #results { list-style: none; margin: 0; padding: 4px; }
 #results li { display: flex; gap: 12px; padding: 8px; cursor: pointer; min-height: 32px; border: 1px solid transparent; }
@@ -38,7 +39,7 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 .root { max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .8; }
 mark { color: var(--vscode-list-highlightForeground); background: transparent; font-weight: bold; }
 li[aria-selected="true"] mark { color: var(--vscode-list-focusHighlightForeground, var(--vscode-list-highlightForeground)); }
-#preview-pane { min-width: 0; display: flex; flex-direction: column; border-left: 1px solid var(--vscode-panel-border); }
+#preview-pane { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; border-left: 1px solid var(--vscode-panel-border); }
 #preview-title { padding: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #preview-note { margin: 0; padding: 0 12px 8px; color: var(--vscode-descriptionForeground); }
 #preview-note:empty { display: none; }
@@ -46,9 +47,9 @@ li[aria-selected="true"] mark { color: var(--vscode-list-focusHighlightForegroun
 pre { margin: 0; font-family: var(--vscode-editor-font-family); font-size: var(--vscode-editor-font-size); font-weight: var(--vscode-editor-font-weight); line-height: 1.5; tab-size: 4; }
 code { font: inherit; }
 #line-numbers { color: var(--vscode-editorLineNumber-foreground); text-align: right; padding-right: 16px; user-select: none; }
-footer { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 10px 12px; border-top: 1px solid var(--vscode-panel-border); }
+footer { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 10px 12px; line-height: 1.5; border-top: 1px solid var(--vscode-panel-border); }
 #count { color: var(--vscode-descriptionForeground); }
-#help { font-size: .9em; }
+#help { font-size: .9em; flex: 1 1 26rem; min-width: 0; overflow-wrap: anywhere; }
 #error { margin: 0; padding: 12px; color: var(--vscode-errorForeground); border-top: 1px solid var(--vscode-inputValidation-errorBorder); }
 .no-preview .columns { grid-template-columns: minmax(0, 1fr); }
 .no-preview #preview-pane, [hidden] { display: none !important; }
@@ -63,7 +64,7 @@ footer { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 10px 12px; bord
   .picker { height: calc(100vh - 12px); }
   .columns { grid-template-columns: minmax(0, 1fr); }
   #preview-pane { display: none; }
-  .force-preview .columns { grid-template-rows: minmax(100px, 1fr) minmax(100px, 1fr); }
+  .force-preview .columns { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
   .force-preview #preview-pane { display: flex; border-left: 0; border-top: 1px solid var(--vscode-panel-border); }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }

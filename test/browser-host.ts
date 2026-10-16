@@ -17,8 +17,10 @@ const host = {
         reply({ type: 'results', requestId: message.requestId, ...rankFiles(files, message.query), indexTruncated: false });
         break;
       case 'select':
-        reply({ type: 'preview', id: message.id, requestId: message.requestId, lines: 6,
-          html: '<span class="hljs-keyword">int</span> main()\n{\n    <span class="hljs-comment">// Read-only mock preview</span>\n    <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;\n}\n',
+        reply({ type: 'preview', id: message.id, requestId: message.requestId, lines: 400,
+          html: '<span class="hljs-keyword">int</span> main()\n{\n'
+            + Array.from({ length: 396 }, (_, i) => `    <span class="hljs-comment">// Preview line ${i + 3}</span>`).join('\n')
+            + '\n    <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;\n}',
           note: 'Browser mock: real discovery, opening and focus restoration require the Extension Development Host.' });
         break;
       case 'accept':

@@ -9,7 +9,7 @@ dependency on the neighboring C++ project.
 
 Requires desktop VS Code 1.95 or newer.
 
-1. Install `telescope-picker-0.1.0.vsix` using **Extensions: Install from VSIX**.
+1. Install `telescope-picker-0.1.1.vsix` using **Extensions: Install from VSIX**.
 2. Open a folder or multi-root workspace.
 3. Run **Telescope Picker: Find Files**, or press **Ctrl+Alt+P**
    (**Cmd+Alt+P** on macOS).
@@ -40,6 +40,8 @@ stacked results/preview layout. Theme colors, editor fonts, focus outlines,
 high-contrast borders, reduced-motion preferences, combobox/listbox semantics,
 live result counts, and explicit errors are supported. Syntax colors use VS Code
 theme color variables, not the editor's TextMate or semantic token engine.
+Results and long previews scroll within their panes; the footer reserves its
+own space and wraps shortcut hints rather than overlapping file or code text.
 
 ## Discovery and preview behavior
 
@@ -104,6 +106,7 @@ exclusions, roots, dirty documents, no preview-tab clutter, panel reuse,
 close/focus restoration, and resume.
 
 `npm run preview` serves the actual HTML/CSS/webview with a **50,000-file mock**
+and a 400-line preview to exercise scrolling and footer containment
 at `http://127.0.0.1:4173`. It is a visual/keyboard harness, not a web extension.
 It does not open real files or test VS Code editor focus. Stop it with Ctrl+C.
 
