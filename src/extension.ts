@@ -12,6 +12,10 @@ export function activate(context: vscode.ExtensionContext): void {
       if (query !== undefined && typeof query !== 'string') throw new Error('Content-search query must be a string.');
       return controller.show(false, 'contents', query);
     }),
+    vscode.commands.registerCommand('telescopePicker.searchCurrentFile', (query?: unknown) => {
+      if (query !== undefined && typeof query !== 'string') throw new Error('Current-file query must be a string.');
+      return controller.show(false, 'currentFile', query);
+    }),
     vscode.commands.registerCommand('telescopePicker.resume', () => controller.show(true)),
     vscode.commands.registerCommand('telescopePicker.openBeside', () => controller.openBeside()),
     vscode.commands.registerCommand('telescopePicker.next', () => controller.navigate(1)),

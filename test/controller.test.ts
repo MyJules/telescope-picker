@@ -50,6 +50,94 @@ beforeEach(async () => {
 });
 afterEach(() => { controller.dispose(); vi.restoreAllMocks(); });
 
+it('searches only the original current document including unsaved text without a workspace', async () => {
+  workspace.workspaceFolders = [];
+  const scans = vi.mocked(ContentProvider.prototype.search).mock.calls.length;
+  await controller.show(false, 'currentFile');
+  picker.value = 'UNSAVED';
+  await vi.waitFor(() => expect(contentItems()).toHaveLength(1));
+  expect(contentItems()[0]?.resourceUri?.toString()).toBe('file:///workspace/original.ts');
+  expect(contentItems()[0]?.label).toBe('const unsaved = 1;');
+  expect(picker.title).toContain('Current File · 1 matching lines');
+  expect(ContentProvider.prototype.search).toHaveBeenCalledTimes(scans);
+  picker.hide();
+  await controller.show(true);
+  picker = window.createQuickPick.mock.results.at(-1)?.value ?? new MockQuickPick();
+  await vi.waitFor(() => expect(contentItems()).toHaveLength(1));
+  expect(contentItems()[0]?.resourceUri?.toString()).toBe('file:///workspace/original.ts');
+  expect(picker.value).toBe('UNSAVED');
+});
+
+it('shows explicit current-file errors, empty and no-match states', async () => {
+  await controller.show(false, 'currentFile');
+  expect(picker.items[0]?.label).toBe('Type text to search in the current file.');
+  picker.value = 'missingText';
+  await vi.waitFor(() => expect(picker.items[0]?.label).toBe('No matching text.'));
+  picker.hide();
+  await controller.show();
+  picker = window.createQuickPick.mock.results.at(-1)?.value ?? new MockQuickPick();
+  picker.hide();
+  await new Promise(resolve => setTimeout(resolve, 50));
+  window.activeTextEditor = undefined;
+  await controller.show(false, 'currentFile', 'const');
+  picker = window.createQuickPick.mock.results.at(-1)?.value ?? new MockQuickPick();
+  expect(picker.items[0]?.label).toContain('Open a text editor');
+});
+
+it('returns every current-file match and opens the exact line beside', async () => {
+  picker.hide();
+  await controller.show();
+  picker = window.createQuickPick.mock.results.at(-1)?.value ?? new MockQuickPick();
+  picker.hide();
+  await new Promise(resolve => setTimeout(resolve, 50));
+  const uri = vscode.Uri.parse('untitled:current-test');
+  const document = createDocument(uri, true, 'const localNeedle = 1;\n'.repeat(305));
+  workspace.textDocuments.push(document);
+  await window.showTextDocument(document, { viewColumn: 1, preview: false });
+  settings.set('telescopePicker.exclude', ['**']);
+  await controller.show(false, 'currentFile', 'LOCALNEEDLE');
+  picker = window.createQuickPick.mock.results.at(-1)?.value ?? new MockQuickPick();
+  await vi.waitFor(() => expect(contentItems()).toHaveLength(305));
+  controller.navigate(1);
+  await controller.openBeside();
+  expect(window.activeTextEditor?.document).toBe(document);
+  expect(window.activeTextEditor?.viewColumn).toBe(2);
+  expect(window.activeTextEditor?.selection.start.line).toBe(1);
+});
+
+it('refreshes current-file text changes only and rejects obsolete local query work', async () => {
+  await controller.show(false, 'currentFile');
+  picker.value = 'const';
+  picker.value = 'unsaved';
+  await vi.waitFor(() => expect(contentItems()).toHaveLength(1));
+  expect(picker.value).toBe('unsaved');
+  const rows = picker.items;
+  documentChanged.fire({
+    document: createDocument(vscode.Uri.parse('chat-input:///prompt'), true), contentChanges: [{}]
+  });
+  expect(picker.items).toBe(rows);
+  const updated = createDocument(original.document.uri, true, 'const changedNeedle = 2;');
+  workspace.textDocuments = [updated];
+  documentChanged.fire({ document: updated, contentChanges: [{}] });
+  await vi.waitFor(() => expect(picker.items[0]?.label).toBe('No matching text.'));
+  picker.value = 'changedNeedle';
+  await vi.waitFor(() => expect(contentItems()).toHaveLength(1));
+  expect(contentItems()[0]?.label).toBe('const changedNeedle = 2;');
+});
+
+it('shows an existing popup before waiting for a mode search to complete', async () => {
+  let finish: (() => void) | undefined;
+  vi.spyOn(ContentProvider.prototype, 'search').mockImplementation(() => new Promise<void>(done => { finish = done; }));
+  picker.value = 'const';
+  picker.show.mockClear();
+  const opening = controller.show(false, 'contents');
+  await vi.waitFor(() => expect(finish).toBeDefined());
+  expect(picker.show).toHaveBeenCalledTimes(1);
+  if (!finish) throw new Error('Expected pending mode search');
+  finish();
+  await opening;
+});
+
 it('uses a native popup without creating or focusing a preview panel', async () => {
   await controller.show();
   expect(window.createQuickPick).toHaveBeenCalledTimes(1);

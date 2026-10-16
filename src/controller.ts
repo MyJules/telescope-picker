@@ -2,12 +2,12 @@ import * as vscode from 'vscode';
 import { FileProvider } from './files';
 import { LatestRequest } from './latest';
 import { EditorPreview, PreviewTooLargeError } from './editorPreview';
-import { rankFiles } from './ranking';
+import { createContentMatcher, rankFiles } from './ranking';
 import { ContentProvider, type ContentUpdate } from './contents';
 import type { ContentMatch, MatchLocation } from './types';
 
-type PickerMode = 'files' | 'contents';
-interface ResumeState { query: string; selectedId?: string; mode: PickerMode }
+type PickerMode = 'files' | 'contents' | 'currentFile';
+interface ResumeState { query: string; selectedId?: string; mode: PickerMode; documentUri?: string }
 interface FileItem extends vscode.QuickPickItem { id?: string; uri?: string; path?: string; location?: MatchLocation }
 interface Session {
   picker: vscode.QuickPick<FileItem>;
@@ -22,8 +22,9 @@ function savedState(value: unknown): ResumeState {
   if (typeof value !== 'object' || value === null) return { query: '', mode: 'files' };
   const query = 'query' in value && typeof value.query === 'string' ? value.query.slice(0, 1024) : '';
   const selectedId = 'selectedId' in value && typeof value.selectedId === 'string' ? value.selectedId : undefined;
-  const mode = 'mode' in value && value.mode === 'contents' ? 'contents' : 'files';
-  return { query, selectedId, mode };
+  const mode = 'mode' in value && (value.mode === 'contents' || value.mode === 'currentFile') ? value.mode : 'files';
+  const documentUri = 'documentUri' in value && typeof value.documentUri === 'string' ? value.documentUri : undefined;
+  return { query, selectedId, mode, ...(documentUri ? { documentUri } : {}) };
 }
 
 function literalLabel(text: string): string { return text.replace(/\$\(/g, '\\$('); }
@@ -44,16 +45,22 @@ export class PickerController implements vscode.Disposable {
   }
 
   async show(resume = false, mode: PickerMode = 'files', query = ''): Promise<void> {
+    const started = Date.now();
+    this.output.appendLine(`Picker requested: ${resume ? 'resume' : mode}`);
     await this.finishing;
     if (this.session) {
-      if (!resume) await this.session.setMode(mode);
-      this.session?.picker.show();
+      const session = this.session;
+      session.picker.show();
+      this.output.appendLine(`Picker shown (existing): ${Date.now() - started} ms`);
+      if (!resume) await session.setMode(mode);
       return;
     }
     const previous = vscode.window.activeTextEditor;
     const column = previous?.viewColumn ?? vscode.ViewColumn.One;
     const picker = vscode.window.createQuickPick<FileItem>();
     const state: ResumeState = resume ? { ...this.resume } : { query, mode };
+    const originalDocumentUri = previous?.document.uri.toString();
+    if (state.mode === 'currentFile' && !resume) state.documentUri = originalDocumentUri;
     const requests = new LatestRequest();
     const subscriptions: vscode.Disposable[] = [];
     const splitButton: vscode.QuickInputButton = {
@@ -78,13 +85,18 @@ export class PickerController implements vscode.Disposable {
       if (picker.title !== next) picker.title = next;
     };
     picker.title = 'Telescope Picker';
-    const modeLabel = (): string => state.mode === 'files' ? 'Files' : 'File Contents';
+    const currentFileButton: vscode.QuickInputButton = {
+      iconPath: new vscode.ThemeIcon('go-to-file'), tooltip: 'Search current file'
+    };
+    const modeLabel = (): string => state.mode === 'files' ? 'Files'
+      : state.mode === 'currentFile' ? 'Current File' : 'File Contents';
     const configure = (): void => {
-      picker.placeholder = `${state.mode === 'files' ? 'Fuzzy file names' : 'Search text within files (ignore case)'} · Enter Open · Ctrl/Cmd+Enter Split · Esc Close`;
+      picker.placeholder = `${state.mode === 'files' ? 'Fuzzy file names'
+        : state.mode === 'currentFile' ? 'Search current file (ignore case)' : 'Search text within files (ignore case)'} · Enter Open · Ctrl/Cmd+Enter Split · Esc Close`;
       picker.buttons = [{
         iconPath: new vscode.ThemeIcon(state.mode === 'files' ? 'search' : 'files'),
         tooltip: state.mode === 'files' ? 'Search file contents' : 'Find files'
-      }];
+      }, currentFileButton];
     };
     configure();
     picker.ignoreFocusOut = true;
@@ -143,7 +155,7 @@ export class PickerController implements vscode.Disposable {
         try {
           picker.keepScrollPosition = !resetScroll && selectionTouched;
           resetScroll = false;
-          if (state.mode === 'contents' && !selectionTouched && !pendingSelection) {
+          if (state.mode !== 'files' && !selectionTouched && !pendingSelection) {
             if (!unchanged) {
               awaitingNativeSelection = true;
               picker.activeItems = [];
@@ -185,7 +197,7 @@ export class PickerController implements vscode.Disposable {
           });
         }
       }
-      title(`Telescope Picker · File Contents · ${result.total} matching lines`
+      title(`Telescope Picker · ${modeLabel()} · ${result.total} matching lines`
         + (result.complete ? ' · Search complete' : ` · Searching roots ${result.searchedRoots}/${result.roots}`)
         + (result.binary ? ` · ${result.binary} binary files skipped` : '')
         + (result.unsupported ? ` · ${result.unsupported} unsupported resources skipped (see Output)` : ''));
@@ -205,6 +217,40 @@ export class PickerController implements vscode.Disposable {
       status('Loading workspace files...');
       try {
         if (query.length > 1024) throw new Error('Queries are limited to 1,024 characters.');
+        if (state.mode === 'currentFile') {
+          if (!state.documentUri) throw new Error('Open a text editor to search the current file.');
+          if (!query.length) {
+            status('Type text to search in the current file.');
+            return;
+          }
+          const uri = vscode.Uri.parse(state.documentUri);
+          const document = vscode.workspace.textDocuments.find(candidate =>
+            !candidate.isClosed && candidate.uri.toString() === state.documentUri)
+            ?? await vscode.workspace.openTextDocument(uri);
+          if (closed || !requests.isCurrent(generation)) return;
+          const version = document.version;
+          const path = vscode.workspace.asRelativePath(uri, false).replaceAll('\\', '/');
+          const file = {
+            id: uri.toString(), path, name: path.split('/').at(-1) ?? path,
+            root: vscode.workspace.getWorkspaceFolder(uri)?.name ?? 'Current file'
+          };
+          const matchLine = createContentMatcher(query);
+          const items: ContentMatch[] = [];
+          for (let line = 0; line < document.lineCount; line++) {
+            if (line % 512 === 0) {
+              await new Promise<void>(done => setTimeout(done, 0));
+              if (closed || !requests.isCurrent(generation)) return;
+              if (document.isClosed || document.version !== version)
+                throw new Error('Current file changed during search. Type again to refresh results.');
+            }
+            const match = matchLine(file, line, document.lineAt(line).text);
+            if (match) items.push(match);
+          }
+          if (!closed && requests.isCurrent(generation)) contentResults({
+            items, total: items.length, complete: true, roots: 1, searchedRoots: 1, binary: 0, unsupported: 0
+          });
+          return;
+        }
         if (!vscode.workspace.workspaceFolders?.length) throw new Error('Open a folder or workspace to find files.');
         if (state.mode === 'contents') {
           if (!query.length) {
@@ -236,7 +282,7 @@ export class PickerController implements vscode.Disposable {
     };
     const schedule = (query: string): void => {
       if (closed || opening) return;
-      if (state.mode === 'contents' && query !== state.query) {
+      if (state.mode !== 'files' && query !== state.query) {
         state.selectedId = undefined;
         selectionTouched = false;
         pendingSelection = undefined;
@@ -250,13 +296,15 @@ export class PickerController implements vscode.Disposable {
       previewedId = undefined;
       if (state.mode === 'files') { void search(query); return; }
       state.query = query;
-      status(query.length ? 'Searching file contents...' : 'Type text to search inside workspace files.');
+      status(query.length ? 'Searching file contents...' : state.mode === 'currentFile'
+        ? 'Type text to search in the current file.' : 'Type text to search inside workspace files.');
       picker.busy = Boolean(query.length);
       debounce = setTimeout(() => { void search(query); }, 80);
     };
     const setMode = async (next: PickerMode): Promise<void> => {
       if (closed || opening || next === state.mode) return;
       state.mode = next;
+      if (next === 'currentFile') state.documentUri = originalDocumentUri;
       state.selectedId = undefined;
       selectionTouched = false;
       pendingSelection = undefined;
@@ -332,12 +380,22 @@ export class PickerController implements vscode.Disposable {
       picker.onDidChangeActive(items => select(items[0])),
       picker.onDidAccept(() => { void accept(false); }),
       picker.onDidTriggerItemButton(event => { void accept(true, event.item); }),
-      picker.onDidTriggerButton(() => { void setMode(state.mode === 'files' ? 'contents' : 'files'); }),
-      picker.onDidHide(() => close(true)),
+      picker.onDidTriggerButton(button => {
+        void setMode(button === currentFileButton ? 'currentFile' : state.mode === 'files' ? 'contents' : 'files');
+      }),
+      picker.onDidHide(() => {
+        this.output.appendLine(`Picker hidden: ${state.mode}`);
+        close(true);
+      }),
       this.files.onDidChange(() => { if (state.mode === 'files') schedule(picker.value); }),
-      this.contents.onDidChange(() => { if (state.mode === 'contents') schedule(picker.value); })
+      this.contents.onDidChange(() => { if (state.mode === 'contents') schedule(picker.value); }),
+      vscode.workspace.onDidChangeTextDocument(event => {
+        if (state.mode === 'currentFile' && event.contentChanges.length
+          && event.document.uri.toString() === state.documentUri) schedule(picker.value);
+      })
     );
     picker.show();
+    this.output.appendLine(`Picker shown: ${Date.now() - started} ms`);
     const searchReady = search(state.query);
     try {
       await vscode.commands.executeCommand('setContext', 'telescopePicker.active', true);

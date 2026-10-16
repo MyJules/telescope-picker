@@ -2,7 +2,7 @@
   "name": "telescope-picker",
   "displayName": "Telescope Picker",
   "description": "Fuzzy file picking and fast text search with live previews in the current code editor.",
-  "version": "0.9.0",
+  "version": "0.10.1",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -27,6 +27,11 @@
   },
   "contributes": {
     "commands": [
+      {
+        "command": "telescopePicker.searchCurrentFile",
+        "title": "Search Current File",
+        "category": "Telescope Picker"
+      },
       {
         "command": "telescopePicker.configureShortcuts",
         "title": "Configure Keyboard Shortcuts",
@@ -79,6 +84,12 @@
       ]
     },
     "keybindings": [
+      {
+        "command": "telescopePicker.searchCurrentFile",
+        "key": "ctrl+alt+l",
+        "mac": "cmd+alt+l",
+        "when": "!terminalFocus"
+      },
       {
         "command": "telescopePicker.searchContents",
         "key": "ctrl+alt+f",

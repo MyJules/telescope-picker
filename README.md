@@ -9,7 +9,7 @@ the original editor group. There is no bottom preview panel or picker webview.
 
 Requires desktop VS Code 1.108 or newer for native file-icon theme support.
 
-1. Install the platform-matching VSIX (for example `telescope-picker-win32-x64-0.9.0.vsix`)
+1. Install the platform-matching VSIX (for example `telescope-picker-win32-x64-0.10.0.vsix`)
    using **Extensions: Install from VSIX**.
 2. Run **Developer: Reload Window** when updating an already-running version.
 3. Open a folder or multi-root workspace.
@@ -18,6 +18,19 @@ Requires desktop VS Code 1.108 or newer for native file-icon theme support.
 5. To search **inside files**, press **Ctrl+Alt+F** (**Cmd+Alt+F** on macOS),
    run **Telescope Picker: Search File Contents**,
    or use the popup's search icon to switch modes. The files icon switches back.
+6. To search only the active editor, press **Ctrl+Alt+L** (**Cmd+Alt+L** on macOS)
+   or run **Telescope Picker: Search Current File**. The popup's current-file
+   button switches to the document that was active when the picker opened.
+
+**Current-file mode** searches literal text without case sensitivity using the
+live document, including unsaved edits, untitled files, and files outside a
+workspace. It shows all matching lines with native file icons and source
+locations. Selection previews the exact line; Enter, split, and Escape behave
+like workspace content search. The target remains fixed while navigating, and
+Resume Picker restores the target URI, query and selection (unsaved contents
+must still exist in the editor). Workspace include/exclude/ignore settings do
+not restrict this explicitly chosen file. Editing the target refreshes results;
+chat and other documents do not. An open text editor is required.
 
 The native popup keeps input focus while the selected file appears in the
 current code editor behind it. Native VS Code syntax highlighting, language
@@ -36,7 +49,7 @@ support, encoding, and unsaved document contents apply.
 ### Configure your shortcuts
 
 Run **Telescope Picker: Configure Keyboard Shortcuts** to open VS Code's shortcut
-editor filtered to this extension. Change **Find Files** and **Search File Contents**
+editor filtered to this extension. Change **Find Files**, **Search File Contents**, or **Search Current File**
 to your preferred keys; use **Change Keybinding** or **Remove Keybinding** to
 replace or disable a default. These are overridable defaults, not runtime-hardcoded
 keys. Changes take effect immediately without rebuilding or reloading.

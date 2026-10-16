@@ -175,7 +175,7 @@ export class MockQuickPick {
   private readonly accepted = new EventEmitter<void>();
   private readonly hidden = new EventEmitter<void>();
   private readonly itemButton = new EventEmitter<{ item: MockItem }>();
-  private readonly button = new EventEmitter<void>();
+  private readonly button = new EventEmitter<QuickInputButton>();
   onDidChangeValue = this.valueChanged.event;
   onDidChangeActive = this.activeChanged.event;
   onDidAccept = this.accepted.event;
@@ -192,7 +192,10 @@ export class MockQuickPick {
   hide(): void { this.hidden.fire(); }
   accept(): void { this.accepted.fire(); }
   split(item: MockItem): void { this.itemButton.fire({ item }); }
-  preview(): void { this.button.fire(); }
+  preview(): void {
+    const button = this.buttons[0];
+    if (button) this.button.fire(button);
+  }
 }
 export const window = {
   activeTextEditor: undefined as TextEditor | undefined,

@@ -143,6 +143,22 @@ async function checkPicker(): Promise<void> {
       assertNoPickerTabs();
 
       await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false });
+      await vscode.commands.executeCommand('telescopePicker.searchCurrentFile', 'UNSAVED preview fixture 137');
+      await until(() => editorAt(vscode.ViewColumn.One)?.document === document
+        && editorAt(vscode.ViewColumn.One)?.selection.start.line === 137,
+      'Current-file mode searches live unsaved contents and previews the exact matching line');
+      await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+      await until(() => vscode.window.activeTextEditor?.document === document
+        && vscode.window.activeTextEditor.selections.every((selection, i) => selection.isEqual(selections[i]!)),
+      'Current-file cancel restores original selections');
+      await vscode.commands.executeCommand('telescopePicker.resume');
+      await until(() => editorAt(vscode.ViewColumn.One)?.document === document
+        && editorAt(vscode.ViewColumn.One)?.selection.start.line === 137,
+      'Resume restores current-file mode and its target document');
+      await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+      await until(() => vscode.window.activeTextEditor?.document === document
+        && vscode.window.activeTextEditor.selections.every((selection, i) => selection.isEqual(selections[i]!)),
+      'Current-file resume cancellation restores original selections');
       await vscode.commands.executeCommand('telescopePicker.searchContents', 'UNSAVED preview fixture 137');
       await until(() => editorAt(vscode.ViewColumn.One)?.document === document
         && editorAt(vscode.ViewColumn.One)?.selection.start.line === 137,
