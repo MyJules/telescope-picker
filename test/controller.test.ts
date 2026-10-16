@@ -299,6 +299,7 @@ it('follows the first ordered match until navigation and avoids redisplaying ide
     publish = update;
     update(result);
   });
+
   await contentMode('const');
   await vi.waitFor(() => expect(contentItems()).toHaveLength(1));
   expect(picker.activeItems[0]?.id).toBe('z.cpp');
@@ -313,6 +314,16 @@ it('follows the first ordered match until navigation and avoids redisplaying ide
   expect(picker.items).toBe(rows);
   expect(picker.activeItems).toBe(active);
   expect(picker.activeItems[0]?.id).toBe('z.cpp');
+});
+it('previews the native first visible match when popup ranking differs from provider path order', async () => {
+  picker.nativeFirst = items => items.filter(item => item.id).at(-1);
+  await contentMode('Needle');
+  await vi.waitFor(() => expect(contentItems()).toHaveLength(3));
+  const firstVisible = contentItems().at(-1);
+  expect(picker.activeItems[0]?.id).toBe(firstVisible?.id);
+  await vi.waitFor(() => expect(window.activeTextEditor?.document.uri.toString())
+    .toBe('file:///workspace/src/other.cpp'));
+  expect(window.activeTextEditor?.selection.start.line).toBe(0);
 });
 it('keeps automatic-preview errors visible while content results continue streaming', async () => {
   let title = picker.title;
@@ -420,6 +431,7 @@ it('groups repeated file matches and skips headings during navigation and accept
     await controller.show(false, 'contents');
     picker.value = 'needle';
     await vi.waitFor(() => expect(contentItems()).toHaveLength(2));
+    picker.fireActive();
     expect(controller.navigate(1)).toBe(true);
     if (!publish) throw new Error('Expected content stream');
     publish({ ...result, items: items.map(item => ({ ...item })), complete: true, searchedRoots: 1 });

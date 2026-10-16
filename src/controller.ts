@@ -69,6 +69,7 @@ export class PickerController implements vscode.Disposable {
     let applying = false;
     let resetScroll = true;
     let selectionTouched = resume;
+    let awaitingNativeSelection = false;
     let resultTitle = 'Telescope Picker';
     let previewError: string | undefined;
     const title = (value: string): void => {
@@ -112,7 +113,8 @@ export class PickerController implements vscode.Disposable {
     };
     const select = (item: FileItem | undefined): void => {
       if (closed || opening || !item?.id || visible.get(item.id) !== item) return;
-      if (!applying && state.selectedId !== item.id) selectionTouched = true;
+      if (!applying && !awaitingNativeSelection && state.selectedId !== item.id) selectionTouched = true;
+      awaitingNativeSelection = false;
       state.selectedId = item.id;
       if (previewedId === item.id) return;
       if (!applying) pendingSelection = undefined;
@@ -141,6 +143,14 @@ export class PickerController implements vscode.Disposable {
         try {
           picker.keepScrollPosition = !resetScroll && selectionTouched;
           resetScroll = false;
+          if (state.mode === 'contents' && !selectionTouched && !pendingSelection) {
+            if (!unchanged) {
+              awaitingNativeSelection = true;
+              picker.activeItems = [];
+              picker.items = items;
+            }
+            return;
+          }
           if (!unchanged) picker.items = items;
           if (!unchanged || current !== active?.id) picker.activeItems = active ? [active] : [];
           select(active);
@@ -308,7 +318,14 @@ export class PickerController implements vscode.Disposable {
         }
       }
     };
-    const session: Session = { picker, state, select, accept, close, setMode };
+    const session: Session = {
+      picker, state, accept, close, setMode,
+      select: item => {
+        awaitingNativeSelection = false;
+        selectionTouched = true;
+        select(item);
+      }
+    };
     this.session = session;
     subscriptions.push(
       picker.onDidChangeValue(value => {

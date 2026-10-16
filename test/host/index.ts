@@ -171,6 +171,17 @@ async function checkPicker(): Promise<void> {
         && vscode.window.activeTextEditor.selection.start.line === 0,
       'Content acceptance pins the selected file at the matching line');
 
+      await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false });
+      await vscode.commands.executeCommand('telescopePicker.searchContents', 'nativeOrderNeedle');
+      const nativeFirst = indexed.files.find(file => file.path === 'zz-native-z.ts');
+      assert.ok(nativeFirst);
+      await until(() => editorAt(vscode.ViewColumn.One)?.document.uri.toString() === nativeFirst.id,
+        'Initial preview follows the native first visible match, not the first path-sorted file');
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      await until(() => vscode.window.activeTextEditor?.document.uri.toString() === nativeFirst.id
+        && activeTab(vscode.ViewColumn.One)?.isPreview === false,
+      'Enter opens the same native-ranked first result that was previewed');
+
       const groupOriginal = await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false });
       groupOriginal.selections = selections;
       await vscode.commands.executeCommand('telescopePicker.searchContents', 'const');

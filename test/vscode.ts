@@ -157,7 +157,16 @@ export class MockQuickPick {
   keepScrollPosition = false;
   enabled = true;
   busy = false;
-  items: readonly MockItem[] = [];
+  private currentItems: readonly MockItem[] = [];
+  nativeFirst: ((items: readonly MockItem[]) => MockItem | undefined) | undefined;
+  get items(): readonly MockItem[] { return this.currentItems; }
+  set items(items: readonly MockItem[]) {
+    this.currentItems = items;
+    if (!this.activeItems.length) {
+      const first = this.nativeFirst?.(items) ?? items.find(item => item.id);
+      if (first) this.activeItems = [first];
+    }
+  }
   buttons: readonly QuickInputButton[] = [];
   private currentValue = '';
   private active: readonly MockItem[] = [];
@@ -178,6 +187,7 @@ export class MockQuickPick {
   get activeItems(): readonly MockItem[] { return this.active; }
   set activeItems(items: readonly MockItem[]) { this.active = items; this.activeChanged.fire(items); }
   show = vi.fn();
+  fireActive(): void { this.activeChanged.fire(this.activeItems); }
   dispose = vi.fn();
   hide(): void { this.hidden.fire(); }
   accept(): void { this.accepted.fire(); }

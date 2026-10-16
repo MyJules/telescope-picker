@@ -78,6 +78,9 @@ Later batches of the same search preserve your navigation and scroll position;
 Resume Picker still restores the previous selection.
 While results stream in, the first ordered match stays selected until you
 navigate. Unchanged result batches do not rebuild or reselect the list.
+For a fresh content query, VS Code chooses the first visible match using its
+native query ranking; previews follow that active row rather than forcing the
+first path-sorted backend result.
 Document updates outside workspace folders (such as chat inputs), and
 metadata-only document events, do not restart content searches.
 Arrow keys and optional
