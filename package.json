@@ -2,9 +2,10 @@
   "name": "telescope-picker",
   "displayName": "Telescope Picker",
   "description": "Fuzzy file picking and fast text search with live previews in the current code editor.",
-  "version": "0.11.1",
+  "version": "0.11.2",
   "publisher": "local",
   "license": "MIT",
+  "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.108.0"
   },
@@ -164,6 +165,7 @@
     }
   },
   "scripts": {
+    "generate:icon": "node scripts/generate-icon.mjs",
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
@@ -179,6 +181,7 @@
     "picomatch": "^4.0.7"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@types/node": "^22.0.0",
     "@types/picomatch": "^4.0.3",
     "@types/vscode": "1.108.0",

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none">
+  <title>Telescope Picker</title>
+  <desc>A cyan telescope on a tripod, beside selected search results, on a midnight blue tile.</desc>
+  <defs>
+    <linearGradient id="background" x1="24" y1="12" x2="224" y2="256" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1C2B48"/>
+      <stop offset="1" stop-color="#0B1222"/>
+    </linearGradient>
+    <linearGradient id="tube" x1="82" y1="91" x2="170" y2="134" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#86F5E0"/>
+      <stop offset="1" stop-color="#29BCD4"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="173" y1="84" x2="195" y2="136" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C1FFF2"/>
+      <stop offset="1" stop-color="#61D9F0"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="248" height="248" rx="52" fill="url(#background)"/>
+  <rect x="5" y="5" width="246" height="246" rx="51" stroke="#637EA8" stroke-opacity=".22" stroke-width="2"/>
+  <path d="M128 150V164M128 163L99 207M128 163L157 207M128 166V207"
+    stroke="#9DB3D7" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="128" cy="149" r="12" fill="#455C84"/>
+  <circle cx="128" cy="149" r="5" fill="#B4C9EB"/>
+  <g transform="rotate(-30 128 112)">
+    <rect x="61" y="101" width="28" height="23" rx="6" fill="#9B95EC"/>
+    <rect x="57" y="98" width="11" height="29" rx="4" fill="#C3BBFF"/>
+    <rect x="82" y="91" width="99" height="43" rx="10" fill="url(#tube)"/>
+    <path d="M96 101H160" stroke="#D5FFF3" stroke-opacity=".65" stroke-width="4" stroke-linecap="round"/>
+    <rect x="171" y="83" width="22" height="59" rx="7" fill="url(#rim)"/>
+    <rect x="184" y="89" width="6" height="47" rx="3" fill="#157DAB"/>
+  </g>
+  <path d="M207 48V64M199 56H215" stroke="#B7A8FF" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="186" cy="40" r="3" fill="#6ADFCF"/>
+  <path d="M37 164L44 170L37 176" stroke="#72E6D0" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M54 170H80" stroke="#72E6D0" stroke-width="6" stroke-linecap="round"/>
+  <path d="M54 188H72" stroke="#61789E" stroke-width="6" stroke-linecap="round"/>
+  <path d="M54 206H65" stroke="#455B80" stroke-width="6" stroke-linecap="round"/>
+</svg>

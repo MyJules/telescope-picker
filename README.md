@@ -9,7 +9,7 @@ the original editor group. There is no bottom preview panel or picker webview.
 
 Requires desktop VS Code 1.108 or newer for native file-icon theme support.
 
-1. Install the platform-matching VSIX (for example `telescope-picker-win32-x64-0.11.1.vsix`)
+1. Install the platform-matching VSIX (for example `telescope-picker-win32-x64-0.11.2.vsix`)
    using **Extensions: Install from VSIX**.
 2. Run **Developer: Reload Window** when updating an already-running version.
 3. Open a folder or multi-root workspace.
@@ -340,6 +340,11 @@ npm run package
 Press F5 for an Extension Development Host. `npm run watch` rebuilds while
 developing. The local VSIX publisher is `local`; choose a real publisher and
 repository before Marketplace publication.
+
+The original extension logo lives in `media/icon.svg`; VS Code uses the
+256 x 256 PNG in `media/icon.png`. After editing the vector source, run
+`npm run generate:icon` to regenerate the packaged icon on any supported desktop
+development platform.
 
 ### Cross-platform packages
 
