@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import * as vscode from 'vscode';
 import type { FileProvider } from './files';
-import { createContentMatcher, type IndexedFile, retainContentMatch } from './ranking';
+import { compareContentMatches, createContentMatcher, type IndexedFile } from './ranking';
 import { excluded, searchScopes, type SearchScope } from './searchScope';
 import type { ContentMatch } from './types';
 
@@ -80,7 +80,8 @@ export class ContentProvider implements vscode.Disposable {
       const state: ContentUpdate = {
         items: [], total: 0, searchedRoots: 0, roots: scopes.length, binary: 0, unsupported: 0, complete: false
       };
-      const best: ContentMatch[] = [];
+      const found: ContentMatch[] = [];
+      let unsorted = false;
       const handled = new Set<string>();
       const dirty = new Set<string>();
       let lastUpdate = 0;
@@ -88,12 +89,13 @@ export class ContentProvider implements vscode.Disposable {
         check();
         if (force || Date.now() - lastUpdate >= 50) {
           lastUpdate = Date.now();
-          update({ ...state, items: [...best] });
+          if (unsorted) { found.sort(compareContentMatches); unsorted = false; }
+          update({ ...state, items: [...found] });
         }
       };
       const collect = (matches: FileMatches, line: number, text: string): void => {
         const match = matchLine(matches.file, line, text);
-        if (match) { matches.total++; retainContentMatch(matches.items, match); }
+        if (match) { matches.total++; matches.items.push(match); }
       };
       const commit = (matches: FileMatches): void => {
         if (matches.invalidEncoding) {
@@ -101,7 +103,8 @@ export class ContentProvider implements vscode.Disposable {
           this.log(`Text search skipped matches with unsupported encoding: ${matches.file.id}`);
         } else {
           state.total += matches.total;
-          for (const item of matches.items) retainContentMatch(best, item);
+          for (const item of matches.items) found.push(item);
+          if (matches.items.length) unsorted = true;
         }
       };
       for (const scope of scopes) {

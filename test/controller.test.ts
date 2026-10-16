@@ -59,6 +59,17 @@ it('uses a native popup without creating or focusing a preview panel', async () 
   expect(picker.items[0]?.iconPath).toBe(vscode.ThemeIcon.File);
   expect(picker.items[0]?.resourceUri?.toString()).toBe('file:///workspace/src/main.cpp');
 });
+it('shows all matching filenames beyond 200, including an empty query', async () => {
+  workspace.findFiles.mockResolvedValue(Array.from({ length: 305 }, (_, index) =>
+    Uri.parse(`file:///workspace/File${index}.cpp`)));
+  fileCreated.fire();
+  await vi.waitFor(() => expect(picker.items).toHaveLength(305));
+  expect(picker.title).toBe('Telescope Picker · 305 results');
+  picker.value = 'File';
+  await vi.waitFor(() => expect(picker.items).toHaveLength(305));
+  expect(picker.title).toBe('Telescope Picker · 305 results');
+  expect(new Set(picker.items.map(item => item.id)).size).toBe(305);
+});
 it('previews in the original editor while preserving popup focus', async () => {
   await vi.waitFor(() => expect(window.showTextDocument).toHaveBeenCalledWith(
     expect.objectContaining({ uri: expect.anything() }), { viewColumn: 1, preserveFocus: true, preview: true }));
@@ -469,7 +480,7 @@ it('groups repeated file matches and skips headings during navigation and accept
   });
 
   it('keeps identical paths in different roots in separate groups and counts matches, not headers', async () => {
-    const items = Array.from({ length: 200 }, (_, index) => ({
+    const items = Array.from({ length: 205 }, (_, index) => ({
       id: `match-${index}`, uri: `file:///root${index}/main.cpp`, path: 'main.cpp', root: `root${index}`,
       location: { line: 0, text: 'needle', matches: [0] }
     }));
@@ -478,9 +489,11 @@ it('groups repeated file matches and skips headings during navigation and accept
     });
     await controller.show(false, 'contents');
     picker.value = 'needle';
-    await vi.waitFor(() => expect(contentItems()).toHaveLength(200));
-    expect(picker.items).toHaveLength(400);
-    expect(picker.title).toContain('205 matching lines (showing 200)');
+    await vi.waitFor(() => expect(contentItems()).toHaveLength(205));
+    expect(picker.items).toHaveLength(410);
+    expect(picker.title).toContain('205 matching lines');
+    expect(picker.title).not.toContain('showing');
+    expect(contentItems().at(-1)?.id).toBe('match-204');
     expect(picker.items[0]?.label).toContain('main.cpp · root0');
     expect(picker.items[2]?.label).toContain('main.cpp · root1');
     expect(contentItems()[0]?.description).toBe('main.cpp:1 · root0');

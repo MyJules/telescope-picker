@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createContentMatcher, rankFiles, retainContentMatch, RESULT_LIMIT, type IndexedFile } from '../src/ranking';
+import { compareContentMatches, createContentMatcher, rankFiles, type IndexedFile } from '../src/ranking';
 import type { ContentMatch } from '../src/types';
 
 const file = (path: string, root = 'app'): IndexedFile => ({
@@ -19,15 +19,16 @@ describe('literal content matching', () => {
     expect(createContentMatcher('  ')(file('main.ts'), 0, '  ')).toBeDefined();
     expect(createContentMatcher('x.y')(file('main.ts'), 0, 'xay')).toBeUndefined();
   });
-  it('retains the best 200, not merely the first 200 encountered', () => {
+  it('orders all content matches without a result limit', () => {
     const items: ContentMatch[] = [];
     for (let line = 300; line >= 0; line--) {
       const match = createContentMatcher('needle')(file('main.ts'), line, 'needle');
-      if (match) retainContentMatch(items, match);
+      if (match) items.push(match);
     }
-    expect(items).toHaveLength(200);
+    items.sort(compareContentMatches);
+    expect(items).toHaveLength(301);
     expect(items[0]?.location.line).toBe(0);
-    expect(items.at(-1)?.location.line).toBe(199);
+    expect(items.at(-1)?.location.line).toBe(300);
   });
 });
 const files = [
@@ -53,12 +54,13 @@ describe('file relevance benchmark', () => {
     expect(new Set(items.map(item => item.id)).size).toBe(2);
     for (const item of items) expect(item.matches.map(index => item.path[index]).join('')).toBe('main');
   });
-  it('caps rendered results, not total matches, with 50,000 paths', () => {
+  it('returns all matches and all empty-query results with 50,000 paths', () => {
     const many = Array.from({ length: 50_000 }, (_, i) => file(`src/module${i}/File${i}.ts`));
     const result = rankFiles(many, 'File');
-    expect(result.items).toHaveLength(RESULT_LIMIT);
+    expect(result.items).toHaveLength(50_000);
     expect(result.total).toBe(50_000);
-    expect(result.truncated).toBe(true);
+    expect(new Set(result.items.map(item => item.id)).size).toBe(50_000);
+    expect(rankFiles(many, '').items).toHaveLength(50_000);
   });
   it('handles empty queries, spaces, and no matches', () => {
     expect(rankFiles(files, '  ').items).toHaveLength(files.length);

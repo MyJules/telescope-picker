@@ -8,7 +8,6 @@ export interface IndexedFile {
   name: string;
 }
 
-export const RESULT_LIMIT = 200;
 const snapshots = new WeakMap<readonly IndexedFile[], SnapshotKeys<IndexedFile>>();
 
 export function createContentMatcher(query: string): (file: IndexedFile, line: number, text: string) => ContentMatch | undefined {
@@ -28,21 +27,8 @@ export function createContentMatcher(query: string): (file: IndexedFile, line: n
   };
 }
 
-export function retainContentMatch(items: ContentMatch[], match: ContentMatch): void {
-  const compare = (a: ContentMatch, b: ContentMatch): number =>
-    a.path.localeCompare(b.path) || a.uri.localeCompare(b.uri) || a.location.line - b.location.line;
-  const last = items.at(-1);
-  if (items.length === RESULT_LIMIT && last && compare(match, last) >= 0) return;
-  let low = 0;
-  let high = items.length;
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    const current = items[middle];
-    if (current && compare(match, current) >= 0) low = middle + 1;
-    else high = middle;
-  }
-  items.splice(low, 0, match);
-  if (items.length > RESULT_LIMIT) items.pop();
+export function compareContentMatches(a: ContentMatch, b: ContentMatch): number {
+  return a.path.localeCompare(b.path) || a.uri.localeCompare(b.uri) || a.location.line - b.location.line;
 }
 
 function keyMatches(result: KeysResult<IndexedFile>): [Result, Result] {
@@ -52,13 +38,13 @@ function keyMatches(result: KeysResult<IndexedFile>): [Result, Result] {
 }
 
 export function rankFiles(files: readonly IndexedFile[], query: string): {
-  items: ResultItem[]; total: number; truncated: boolean;
+  items: ResultItem[]; total: number;
 } {
   const needle = query.trim();
   if (!needle) {
     return {
-      items: files.slice(0, RESULT_LIMIT).map(file => ({ id: file.id, path: file.path, root: file.root, matches: [] })),
-      total: files.length, truncated: files.length > RESULT_LIMIT
+      items: files.map(file => ({ id: file.id, path: file.path, root: file.root, matches: [] })),
+      total: files.length
     };
   }
   let snapshot = snapshots.get(files);
@@ -67,7 +53,7 @@ export function rankFiles(files: readonly IndexedFile[], query: string): {
     snapshots.set(files, snapshot);
   }
   const results = fuzzysort.go(needle, snapshot, {
-    limit: RESULT_LIMIT,
+    limit: files.length,
     threshold: 0
   });
   const ordered = [...results].sort((a, b) =>
@@ -81,7 +67,6 @@ export function rankFiles(files: readonly IndexedFile[], query: string): {
       const offset = useName ? file.path.length - file.name.length : 0;
       return { id: file.id, path: file.path, root: file.root, matches: match.indexes.map(index => index + offset) };
     }),
-    total: results.total,
-    truncated: results.total > results.length
+    total: results.total
   };
 }

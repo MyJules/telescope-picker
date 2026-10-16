@@ -56,7 +56,7 @@ returns focus to the editor group. Other existing editor tabs are not closed.
 State is saved per workspace on close or acceptance. Opening an already-open
 picker reuses it. Native Quick Pick supplies accessibility, matching highlights,
 themes, fonts, and final result ordering. Fuzzysort pre-ranks filename results;
-text results are ordered by path and line, with up to 200 candidates displayed.
+text results include all matching lines; the native popup applies its query ranking.
 Remap shortcuts if another extension conflicts.
 
 ## File icons and grouped results
@@ -85,7 +85,7 @@ Document updates outside workspace folders (such as chat inputs), and
 metadata-only document events, do not restart content searches.
 Arrow keys and optional
 Ctrl+J/K navigation skip headings; Enter, split, Escape, and resume still act on
-matching lines. The 200-result cap counts matches, not file headings.
+matching lines. Content search has no result-count cap; all matching lines are available.
 Identical paths in different workspace roots remain separate groups.
 
 Non-selectable separators cannot display resource icons, so themed icons appear
@@ -110,8 +110,8 @@ removed when changing selection/query or closing/accepting the picker.
   workspace directories and streams **only matching lines**, rather than sending
   every line to the extension host. No `workspace.findFiles` discovery is needed
   before text search. There is no total content-byte/line/file cap; the popup
-  retains the first 200 lines in path/line order and displays the full matching-line
-  count. Very broad queries can still take longer.
+  retains and displays all matching lines. Very broad queries use more memory
+  and can take longer to render, filter, and update than narrower queries.
 - Dirty documents use their live, decoded contents instead of stale disk matches.
   Their ignore-file eligibility is cached and refreshed on filesystem/settings
   changes. This does not invoke VS Code's bundled executable,
@@ -152,8 +152,10 @@ removed when changing selection/query or closing/accepting the picker.
 - Root descriptions distinguish duplicate filenames. Equal root names include
   their URI, and overlapping roots are deduplicated by URI. The cached index is
   invalidated on file creation/deletion, root changes, or `files.exclude` changes.
-- The **filename** index is capped at 100,000 unique paths and the popup receives at most 200
-  ranked candidates. The title discloses truncation and total match counts.
+- The **filename** index is capped at 100,000 unique paths, but the popup receives
+  every matching indexed file, including all indexed files for an empty query.
+  There is no 200-result limit in either mode. The title discloses the index limit
+  if reached. Broad queries can cost more memory and rendering time.
   Queries over 1,024 characters show an explicit error.
 - Loading, no matches, discovery errors, preview errors, and opening failures are
   explicit. Details are logged in **Output: Telescope Picker**. Status rows do
@@ -211,7 +213,7 @@ ignore/exclude/sibling rules, overlapping roots, live text, progress,
 invalidation, mode switching, resume, match highlights, and exact-line opening.
 Icon/group tests verify native resource URIs and theme-icon references in both
 modes, heading isolation, multi-root groups, keyboard navigation, escaped labels,
-and match-count truncation independent of headings.
+and complete result rendering beyond 200 matches independently of headings.
 Extension-host tests run on VS Code **1.108.0** against an isolated two-root
 workspace and exercise actual preview switching, dirty contents, original
 selections/scroll restoration, temporary-tab cleanup, Enter pinning, resume,
@@ -230,7 +232,14 @@ use `npx --yes npm@11 ci` instead of upgrading global npm.
 The ranking benchmark uses 50,000 synthetic C++ paths over 250 directories and
 100 warm queries. On Windows x64, AMD Ryzen 7 7700X, 63 GiB reported RAM,
 Node 22.16.0, the v0.2 baseline was approximately **18 ms p50 / 29 ms p95**.
-It verifies the 200-result limit and fails above 50 ms ranking p95.
+It verifies that every filename match is returned and fails above the 50 ms
+ranking p95 target. The historical v0.2 figures above used a 200-result limit
+and are not an unlimited-result performance measurement.
+With unlimited filename results on the same machine, a 100-query run over
+50,000 paths measured approximately **59 ms p50 / 178 ms p95** (Node 22.16.0).
+This exceeds the 50 ms target, so the benchmark currently exits unsuccessfully
+for unlimited results. Popup rendering and IPC add further cost; all results
+are returned rather than silently restoring a cap.
 Immutable fuzzysort snapshots avoid per-candidate custom scoring costs.
 
 The literal-content regression test uses a 34 MiB UTF-8 file, over 100,000

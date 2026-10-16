@@ -186,7 +186,6 @@ export class PickerController implements vscode.Disposable {
         }
       }
       title(`Telescope Picker · File Contents · ${result.total} matching lines`
-        + (result.total > result.items.length ? ` (showing ${result.items.length})` : '')
         + (result.complete ? ' · Search complete' : ` · Searching roots ${result.searchedRoots}/${result.roots}`)
         + (result.binary ? ` · ${result.binary} binary files skipped` : '')
         + (result.unsupported ? ` · ${result.unsupported} unsupported resources skipped (see Output)` : ''));
@@ -225,7 +224,6 @@ export class PickerController implements vscode.Disposable {
           resourceUri: vscode.Uri.parse(file.id), iconPath: vscode.ThemeIcon.File, alwaysShow: true, buttons: [splitButton]
         }));
         title(`Telescope Picker · ${ranked.total} results`
-          + (ranked.truncated ? ` (showing ${items.length})` : '')
           + (indexed.truncated ? ' · Index limited to 100,000 files' : ''));
         display(items, query.trim() ? 'No matching files.' : 'No workspace files found.');
       } catch (reason) {

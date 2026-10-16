@@ -94,14 +94,27 @@ it('quickly searches beyond 32 MiB/100,000 lines without sending every line to t
     const result = await search('uniqueNeedle');
     times.push(performance.now() - started);
     expect(result.total).toBe(205);
-    expect(result.items).toHaveLength(200);
+    expect(result.items).toHaveLength(205);
     expect(result.items[0]?.location.line).toBe(100_001);
-    expect(result.items.at(-1)?.location.line).toBe(100_200);
+    expect(result.items.at(-1)?.location.line).toBe(100_205);
   }
   const worst = Math.max(...times);
   console.log(`34 MiB literal search, five full-provider runs (ms): ${times.map(value => value.toFixed(1)).join(', ')}`);
   expect(worst).toBeLessThan(500);
 }, 20_000);
+
+it('returns every matching line across large on-disk and dirty files without truncation', async () => {
+  await fixture('many.txt', 'allMatchesNeedle\n'.repeat(20_005));
+  const dirty = await fixture('dirty-many.ts', 'diskOnlyNeedle\n');
+  workspace.textDocuments.push(createDocument(vscode.Uri.parse(dirty.toString()), true, 'allMatchesNeedle\n'.repeat(305)));
+  const result = await search('allMatchesNeedle');
+  expect(result.total).toBe(20_310);
+  expect(result.items).toHaveLength(result.total);
+  expect(new Set(result.items.map(item => item.id)).size).toBe(result.total);
+  expect(result.items.filter(item => item.path === 'dirty-many.ts')).toHaveLength(305);
+  expect(result.items.at(-1)?.location.line).toBe(20_004);
+  expect(result.complete).toBe(true);
+});
 
 it('skips matching binary/unsupported-encoding files and decodes UTF-16', async () => {
   await fixture('binary.dat', Buffer.from('needle\n\0needle\n'));

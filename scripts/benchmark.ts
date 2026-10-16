@@ -13,7 +13,7 @@ for (let run = 0; run < 20; run++) for (const query of queries) {
   const start = performance.now();
   const result = rankFiles(files, query);
   times.push(performance.now() - start);
-  if (result.items.length > 200) throw new Error('Rendered result limit exceeded');
+  if (result.items.length !== result.total) throw new Error('Filename matches were truncated');
 }
 times.sort((a, b) => a - b);
 console.log(JSON.stringify({
@@ -21,6 +21,6 @@ console.log(JSON.stringify({
   cpu: cpus()[0]?.model, memoryGiB: Math.round(totalmem() / 1024 ** 3),
   paths: files.length, samples: times.length, p50ms: times[Math.floor(times.length * .5)],
   p95ms: times[Math.floor(times.length * .95)], maxMs: times.at(-1),
-  scope: 'Warm host ranking only; excludes webview rendering, IPC, filesystem discovery, and picker startup'
+  scope: 'Unlimited warm host ranking only; excludes native popup rendering, IPC, filesystem discovery, and picker startup'
 }, null, 2));
 if ((times[Math.floor(times.length * .95)] ?? Infinity) > 50) process.exitCode = 1;
