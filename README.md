@@ -9,7 +9,7 @@ the original editor group. There is no bottom preview panel or picker webview.
 
 Requires desktop VS Code 1.108 or newer for native file-icon theme support.
 
-1. Install the platform-matching VSIX (for example `telescope-picker-win32-x64-0.10.0.vsix`)
+1. Install the platform-matching VSIX (for example `telescope-picker-win32-x64-0.10.2.vsix`)
    using **Extensions: Install from VSIX**.
 2. Run **Developer: Reload Window** when updating an already-running version.
 3. Open a folder or multi-root workspace.
@@ -251,11 +251,21 @@ removed when changing selection/query or closing/accepting the picker.
 
 Restricted workspaces and desktop URI-based remote workspaces are supported by
 design. Content search requires the packaged binary to match the extension host's
-OS/architecture. VSIX packages target the machine running `npm run package`; build
-on the matching host for SSH/WSL/container installations, rather than installing
-a Windows binary on Linux. Non-filesystem content-search limitations apply above.
-SSH, WSL, containers, macOS, Linux, and real screen-reader workflows need
-additional manual qualification. Browser-hosted VS Code is not supported.
+OS/architecture. Separate native VSIX builds cover these targets:
+
+| Extension host | Intel/AMD x64 | ARM64 |
+| --- | --- | --- |
+| Windows | `win32-x64` | `win32-arm64` |
+| macOS | `darwin-x64` | `darwin-arm64` |
+| Linux (glibc) | `linux-x64` | `linux-arm64` |
+
+For SSH, WSL, and containers, choose the **remote extension host's** OS and
+architecture, not the local desktop's, and install in that remote environment.
+Alpine/musl Linux, 32-bit hosts, and browser-hosted VS Code are not supported
+package targets. Non-filesystem content-search limitations apply above.
+SSH, WSL, containers, and real screen-reader workflows still need manual
+qualification. Windows has been tested locally; macOS/Linux qualification
+depends on successful native CI runs, not just producing a VSIX.
 
 ## Develop and validate
 
@@ -274,6 +284,21 @@ npm run package
 Press F5 for an Extension Development Host. `npm run watch` rebuilds while
 developing. The local VSIX publisher is `local`; choose a real publisher and
 repository before Marketplace publication.
+
+### Cross-platform packages
+
+The **Test and package desktop platforms** GitHub Actions workflow builds all six
+targets on matching native runners. Each job runs type checking, unit tests
+(including the real ripgrep backend), VS Code extension-host tests, and packaging.
+Linux extension-host tests use Xvfb. Download the separate VSIX artifacts from a
+successful workflow run; no Marketplace publication or GitHub release is automatic.
+Hosted ARM runners require a repository/account eligible for those GitHub runners.
+
+Locally, `npm ci` and `npm run package` build only the current host's target.
+Packaging checks that the bundled ripgrep executable actually runs before
+creating the VSIX, and rejects unsupported hosts and cross-target arguments.
+Do not rename a Windows VSIX to a Linux/macOS target or copy its `node_modules`;
+install dependencies and build natively on each target instead.
 
 Unit tests cover relevance, discovery/cache, request generations, the native
 popup, editor-preview cancellation/races, dirty documents, pinned/existing tabs,

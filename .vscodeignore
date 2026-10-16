@@ -2,6 +2,7 @@ src/**
 test/**
 scripts/**
 .vscode/**
+.github/**
 .vscode-test/**
 node_modules/fuzzysort/**
 node_modules/picomatch/**

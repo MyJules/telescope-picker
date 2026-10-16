@@ -1,0 +1,56 @@
+name: Test and package desktop platforms
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: win32-x64
+            runner: windows-2022
+          - target: win32-arm64
+            runner: windows-11-arm
+          - target: darwin-x64
+            runner: macos-15-intel
+          - target: darwin-arm64
+            runner: macos-14
+          - target: linux-x64
+            runner: ubuntu-22.04
+          - target: linux-arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Verify native build target
+        env:
+          EXPECTED_TARGET: ${{ matrix.target }}
+        run: node -e "if (process.platform + '-' + process.arch !== process.env.EXPECTED_TARGET) throw new Error('Runner architecture does not match package target')"
+      - run: npx --yes npm@11 ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Extension-host tests (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:host
+      - name: Extension-host tests (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: npm run test:host
+      - run: npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: telescope-picker-${{ matrix.target }}
+          path: telescope-picker-${{ matrix.target }}-*.vsix
+          if-no-files-found: error
