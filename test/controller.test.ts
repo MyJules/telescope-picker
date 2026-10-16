@@ -197,6 +197,41 @@ it('searches lines, preserves code-editor previews, and opens a match at its rea
   expect(window.activeTextEditor?.document.uri.toString()).toBe('file:///workspace/src/main.cpp');
   expect(window.activeTextEditor?.selection.start.line).toBe(1);
 });
+it('starts a new content query at the first match instead of retaining the old selection and scroll', async () => {
+  await contentMode('Needle');
+  await vi.waitFor(() => expect(contentItems()).toHaveLength(3));
+  controller.navigate(1);
+  controller.navigate(1);
+  expect(picker.activeItems[0]?.id).toBe(contentItems()[2]?.id);
+  picker.keepScrollPosition = true;
+  picker.value = 'needle';
+  expect(picker.keepScrollPosition).toBe(false);
+  await vi.waitFor(() => expect(contentItems()).toHaveLength(3));
+  expect(picker.activeItems[0]?.id).toBe(contentItems()[0]?.id);
+  expect(picker.keepScrollPosition).toBe(false);
+});
+
+it('preserves scrolling and navigation on later batches of the same content query', async () => {
+  let publish: ((value: ContentUpdate) => void) | undefined;
+  const items = ['first.cpp', 'second.cpp'].map(path => ({
+    id: path, uri: `file:///workspace/${path}`, path, root: 'workspace',
+    location: { line: 0, text: 'needle', matches: [0] }
+  }));
+  const result = { items, total: 2, roots: 1, searchedRoots: 0, complete: false, binary: 0, unsupported: 0 };
+  vi.spyOn(ContentProvider.prototype, 'search').mockImplementation(async (_query, update) => {
+    publish = update;
+    update(result);
+  });
+  await contentMode('needle');
+  await vi.waitFor(() => expect(contentItems()).toHaveLength(2));
+  expect(picker.keepScrollPosition).toBe(false);
+  controller.navigate(1);
+  if (!publish) throw new Error('Expected content stream');
+  publish({ ...result, searchedRoots: 1, complete: true });
+  expect(picker.keepScrollPosition).toBe(true);
+  expect(picker.activeItems[0]?.id).toBe('second.cpp');
+});
+
 it('resumes content mode, query and selection across streaming updates', async () => {
   await contentMode('fuzzyNeedle');
   await vi.waitFor(() => expect(contentItems()).toHaveLength(2));

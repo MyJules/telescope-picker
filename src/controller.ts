@@ -67,6 +67,7 @@ export class PickerController implements vscode.Disposable {
     let previewedId: string | undefined;
     let pendingSelection: string | undefined;
     let applying = false;
+    let resetScroll = true;
     let resultTitle = 'Telescope Picker';
     let previewError: string | undefined;
     const title = (value: string): void => {
@@ -86,7 +87,7 @@ export class PickerController implements vscode.Disposable {
     configure();
     picker.ignoreFocusOut = true;
     picker.matchOnDescription = false;
-    picker.keepScrollPosition = true;
+    picker.keepScrollPosition = false;
     picker.value = state.query;
 
     const report = (reason: unknown): string => {
@@ -127,6 +128,8 @@ export class PickerController implements vscode.Disposable {
         if (active?.id === pendingSelection) pendingSelection = undefined;
         applying = true;
         try {
+          picker.keepScrollPosition = !resetScroll;
+          resetScroll = false;
           picker.items = items;
           picker.activeItems = active ? [active] : [];
           select(active);
@@ -214,6 +217,12 @@ export class PickerController implements vscode.Disposable {
     };
     const schedule = (query: string): void => {
       if (closed || opening) return;
+      if (state.mode === 'contents' && query !== state.query) {
+        state.selectedId = undefined;
+        pendingSelection = undefined;
+        resetScroll = true;
+        picker.keepScrollPosition = false;
+      }
       clearTimeout(debounce);
       requests.cancel();
       this.contents.cancel();
@@ -229,6 +238,9 @@ export class PickerController implements vscode.Disposable {
       if (closed || opening || next === state.mode) return;
       state.mode = next;
       state.selectedId = undefined;
+      pendingSelection = undefined;
+      resetScroll = true;
+      picker.keepScrollPosition = false;
       configure();
       await search(picker.value);
     };

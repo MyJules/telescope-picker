@@ -73,6 +73,9 @@ showing the relative path, workspace root, and visible match count.
 Matching rows show the active theme's file icon and code excerpt, with
 `relative/path:line · workspace root` beside each match, so its source remains
 visible even when the file heading has scrolled out of view.
+Changing the content query resets selection and scrolling to the first match.
+Later batches of the same search preserve your navigation and scroll position;
+Resume Picker still restores the previous selection.
 Arrow keys and optional
 Ctrl+J/K navigation skip headings; Enter, split, Escape, and resume still act on
 matching lines. The 200-result cap counts matches, not file headings.
