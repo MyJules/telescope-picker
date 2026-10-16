@@ -50,7 +50,10 @@ export class ContentProvider implements vscode.Disposable {
     const watcher = vscode.workspace.createFileSystemWatcher('**/*');
     this.subscriptions = [
       watcher, watcher.onDidChange(invalidate), files.onDidChange(invalidate),
-      vscode.workspace.onDidChangeTextDocument(() => this.changed.fire()),
+      vscode.workspace.onDidChangeTextDocument(event => {
+        if (event.contentChanges.length && vscode.workspace.getWorkspaceFolder(event.document.uri))
+          this.changed.fire();
+      }),
       vscode.workspace.onDidChangeConfiguration(event => {
         if (event.affectsConfiguration('search')) invalidate();
       })

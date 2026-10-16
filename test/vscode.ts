@@ -104,7 +104,7 @@ export const QuickPickItemKind = { Separator: -1, Default: 0 };
 export class ThemeColor { constructor(readonly id: string) {} }
 export const fileCreated = new EventEmitter<void>();
 export const fileChanged = new EventEmitter<void>();
-export const documentChanged = new EventEmitter<void>();
+export const documentChanged = new EventEmitter<{ document: TextDocument; contentChanges: readonly unknown[] }>();
 export const fileDeleted = new EventEmitter<void>();
 export const foldersChanged = new EventEmitter<void>();
 export const configurationChanged = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();

@@ -256,7 +256,9 @@ it('debounces content queries and refreshes edited documents without accepting s
   expect(window.activeTextEditor?.viewColumn).not.toBe(2);
   await vi.waitFor(() => expect(contentItems()[0]?.label).toContain('otherNeedle'));
   expect(contentItems()).toHaveLength(1);
-  documentChanged.fire();
+  const edited = workspace.textDocuments.find(document => document.uri.toString() === 'file:///workspace/src/main.cpp');
+  if (!edited) throw new Error('Expected workspace document');
+  documentChanged.fire({ document: edited, contentChanges: [{}] });
   expect(picker.items[0]?.id).toBeUndefined();
   await vi.waitFor(() => expect(contentItems()[0]?.label).toContain('otherNeedle'));
 });
@@ -268,6 +270,49 @@ it('shows explicit content-query limits and cancels a pending scan when the popu
   await new Promise(done => setTimeout(done, 220));
   expect(state.saved.at(-1)).toMatchObject({ mode: 'contents', query: 'fuzzyNeedle' });
   expect(window.activeTextEditor?.document).toBe(original.document);
+});
+it('ignores chat documents and metadata-only document events while a content picker is open', async () => {
+  await contentMode('Needle');
+  await vi.waitFor(() => expect(contentItems()).toHaveLength(3));
+  const items = picker.items;
+  const searches = vi.mocked(ContentProvider.prototype.search).mock.calls.length;
+  documentChanged.fire({
+    document: createDocument(vscode.Uri.parse('chat-input:///session/prompt'), true, 'const'),
+    contentChanges: [{}]
+  });
+  const document = workspace.textDocuments[0];
+  if (!document) throw new Error('Expected workspace document');
+  documentChanged.fire({ document, contentChanges: [] });
+  await new Promise(resolve => setTimeout(resolve, 120));
+  expect(ContentProvider.prototype.search).toHaveBeenCalledTimes(searches);
+  expect(picker.items).toBe(items);
+});
+
+it('follows the first ordered match until navigation and avoids redisplaying identical streamed rows', async () => {
+  let publish: ((value: ContentUpdate) => void) | undefined;
+  const items = ['a.cpp', 'z.cpp'].map(path => ({
+    id: path, uri: `file:///workspace/${path}`, path, root: 'workspace',
+    location: { line: 0, text: 'const value = 1;', matches: [0] }
+  }));
+  const result = { items: items.slice(1), total: 1, roots: 1, searchedRoots: 0, complete: false, binary: 0, unsupported: 0 };
+  vi.spyOn(ContentProvider.prototype, 'search').mockImplementation(async (_query, update) => {
+    publish = update;
+    update(result);
+  });
+  await contentMode('const');
+  await vi.waitFor(() => expect(contentItems()).toHaveLength(1));
+  expect(picker.activeItems[0]?.id).toBe('z.cpp');
+  if (!publish) throw new Error('Expected content stream');
+  publish({ ...result, items, total: 2 });
+  expect(picker.activeItems[0]?.id).toBe('a.cpp');
+  expect(picker.keepScrollPosition).toBe(false);
+  controller.navigate(1);
+  const rows = picker.items;
+  const active = picker.activeItems;
+  publish({ ...result, items, total: 2, searchedRoots: 1, complete: true });
+  expect(picker.items).toBe(rows);
+  expect(picker.activeItems).toBe(active);
+  expect(picker.activeItems[0]?.id).toBe('z.cpp');
 });
 it('keeps automatic-preview errors visible while content results continue streaming', async () => {
   let title = picker.title;

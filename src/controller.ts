@@ -68,6 +68,7 @@ export class PickerController implements vscode.Disposable {
     let pendingSelection: string | undefined;
     let applying = false;
     let resetScroll = true;
+    let selectionTouched = resume;
     let resultTitle = 'Telescope Picker';
     let previewError: string | undefined;
     const title = (value: string): void => {
@@ -111,6 +112,7 @@ export class PickerController implements vscode.Disposable {
     };
     const select = (item: FileItem | undefined): void => {
       if (closed || opening || !item?.id || visible.get(item.id) !== item) return;
+      if (!applying && state.selectedId !== item.id) selectionTouched = true;
       state.selectedId = item.id;
       if (previewedId === item.id) return;
       if (!applying) pendingSelection = undefined;
@@ -120,18 +122,27 @@ export class PickerController implements vscode.Disposable {
       preview.select(item.uri ?? item.id, item.location);
     };
     const display = (items: FileItem[], empty: string): void => {
+      items = items.map((item, index) => {
+        const previous = item.id ? visible.get(item.id) : picker.items[index];
+        return previous && previous.id === item.id && previous.label === item.label
+          && previous.description === item.description && previous.uri === item.uri
+          && previous.location?.text === item.location?.text ? previous : item;
+      });
+      const unchanged = items.length === picker.items.length && items.every((item, index) => item === picker.items[index]);
+      const current = picker.activeItems[0]?.id;
       visible = new Map(items.flatMap(item => item.id ? [[item.id, item] as const] : []));
       if (!items.length) status(empty);
       else {
         const active = items.find(item => item.id && item.id === pendingSelection)
-          ?? items.find(item => item.id && item.id === state.selectedId) ?? items.find(item => item.id);
+          ?? (selectionTouched ? items.find(item => item.id && item.id === state.selectedId) : undefined)
+          ?? items.find(item => item.id);
         if (active?.id === pendingSelection) pendingSelection = undefined;
         applying = true;
         try {
-          picker.keepScrollPosition = !resetScroll;
+          picker.keepScrollPosition = !resetScroll && selectionTouched;
           resetScroll = false;
-          picker.items = items;
-          picker.activeItems = active ? [active] : [];
+          if (!unchanged) picker.items = items;
+          if (!unchanged || current !== active?.id) picker.activeItems = active ? [active] : [];
           select(active);
         } finally { applying = false; }
       }
@@ -219,6 +230,7 @@ export class PickerController implements vscode.Disposable {
       if (closed || opening) return;
       if (state.mode === 'contents' && query !== state.query) {
         state.selectedId = undefined;
+        selectionTouched = false;
         pendingSelection = undefined;
         resetScroll = true;
         picker.keepScrollPosition = false;
@@ -238,6 +250,7 @@ export class PickerController implements vscode.Disposable {
       if (closed || opening || next === state.mode) return;
       state.mode = next;
       state.selectedId = undefined;
+      selectionTouched = false;
       pendingSelection = undefined;
       resetScroll = true;
       picker.keepScrollPosition = false;

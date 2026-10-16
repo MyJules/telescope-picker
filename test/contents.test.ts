@@ -206,7 +206,9 @@ it('cancels live updates and invalidates on document, filesystem and search-sett
   const changed = vi.fn();
   provider.onDidChange(changed);
   fileChanged.fire();
-  documentChanged.fire();
+  const document = workspace.textDocuments[0];
+  if (!document) throw new Error('Expected workspace document');
+  documentChanged.fire({ document, contentChanges: [{}] });
   fileCreated.fire();
   configurationChanged.fire({ affectsConfiguration: section => section === 'search' });
   expect(changed).toHaveBeenCalledTimes(4);

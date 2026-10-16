@@ -2,7 +2,7 @@
   "name": "telescope-picker",
   "displayName": "Telescope Picker",
   "description": "Fuzzy file picking and fast text search with live previews in the current code editor.",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "publisher": "local",
   "license": "MIT",
   "engines": {
