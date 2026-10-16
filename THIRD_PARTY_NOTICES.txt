@@ -1,6 +1,12 @@
 The extension bundle includes fuzzysort:
 https://github.com/farzher/fuzzysort
 
+Content search packages @vscode/ripgrep and its platform-specific binary:
+https://github.com/microsoft/vscode-ripgrep
+https://github.com/BurntSushi/ripgrep
+Their MIT license notices are included with the packaged node_modules.
+Ripgrep is not taken from the VS Code installation or the user's PATH.
+
 MIT License
 
 Copyright (c) 2018 Stephen Kamenar

@@ -30,6 +30,45 @@ it('debounces navigation and previews only the latest selection with focus prese
   expect(window.activeTextEditor?.document.uri.toString()).toBe(target);
   expect(window.showTextDocument.mock.calls[0]?.[1]).toEqual({ viewColumn: 1, preserveFocus: true, preview: true });
 });
+it('reveals fuzzy content matches and removes theme-based highlights when the query changes', async () => {
+  const document = createDocument(vscode.Uri.parse(target), true, '// heading\nconst fuzzyNeedle = 1;');
+  workspace.textDocuments.push(document);
+  const location = { line: 1, text: document.lineAt(1).text, matches: [6, 8, 11] };
+  preview.select(target, location);
+  await vi.advanceTimersByTimeAsync(40);
+  const editor = window.activeTextEditor;
+  expect(editor?.selection.start).toMatchObject({ line: 1, character: 6 });
+  expect(editor?.setDecorations).toHaveBeenCalledWith(expect.anything(), [
+    new vscode.Range(1, 6, 1, 7), new vscode.Range(1, 8, 1, 9), new vscode.Range(1, 11, 1, 12)
+  ]);
+  expect(editor?.revealRange).toHaveBeenCalledWith(
+    new vscode.Range(1, 6, 1, 6), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+  preview.suspend();
+  expect(editor?.setDecorations).toHaveBeenLastCalledWith(expect.anything(), []);
+  await preview.finish(true);
+  const decoration = window.createTextEditorDecorationType.mock.results.at(-1)?.value;
+  expect(decoration?.dispose).toHaveBeenCalled();
+});
+it.each([false, true])('opens the exact matched line, including beside=%s', async beside => {
+  const document = createDocument(vscode.Uri.parse(target), true, '// heading\nconst fuzzyNeedle = 1;');
+  workspace.textDocuments.push(document);
+  const location = { line: 1, text: document.lineAt(1).text, matches: [6, 8, 11] };
+  await preview.accept(document.uri, beside, location);
+  expect(window.activeTextEditor?.selection.start).toMatchObject({ line: 1, character: 6 });
+  expect(window.activeTextEditor?.viewColumn).toBe(beside ? 2 : 1);
+  if (beside) expect(window.tabGroups.all[0]?.activeTab?.document).toBe(original.document);
+});
+it('rejects changed content locations instead of navigating to a stale line', async () => {
+  const document = createDocument(vscode.Uri.parse(target), true, 'changed');
+  workspace.textDocuments.push(document);
+  const location = { line: 0, text: 'original', matches: [0] };
+  preview.select(target, location);
+  await vi.advanceTimersByTimeAsync(40);
+  expect(errors).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('contents changed') }));
+  expect(window.showTextDocument).not.toHaveBeenCalled();
+  await expect(preview.accept(document.uri, false, location)).rejects.toThrow('contents changed');
+  expect(window.showTextDocument).not.toHaveBeenCalled();
+});
 it('restores document, dirty state, selections and visible range and closes temporary tabs', async () => {
   preview.select(target);
   await vi.advanceTimersByTimeAsync(40);
@@ -65,6 +104,17 @@ it('does not show an obsolete file when its document load completes late', async
   complete(createDocument(vscode.Uri.parse('file:///workspace/old.ts')));
   await vi.advanceTimersByTimeAsync(40);
   expect(window.showTextDocument).toHaveBeenCalledTimes(1);
+  expect(window.activeTextEditor?.document.uri.toString()).toBe(target);
+});
+it('does not let an obsolete preview failure replace the current selection status', async () => {
+  let fail: (reason: Error) => void = () => { throw new Error('No pending document load'); };
+  workspace.openTextDocument.mockImplementationOnce(() => new Promise<vscode.TextDocument>((_resolve, reject) => { fail = reject; }));
+  preview.select('file:///workspace/obsolete.ts');
+  await vi.advanceTimersByTimeAsync(40);
+  preview.select(target);
+  fail(new Error('Obsolete read failed'));
+  await vi.advanceTimersByTimeAsync(40);
+  expect(errors).not.toHaveBeenCalled();
   expect(window.activeTextEditor?.document.uri.toString()).toBe(target);
 });
 it('leaves pre-existing tabs and user-pinned or dirty preview tabs alone', async () => {

@@ -1,8 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { rankFiles, RESULT_LIMIT, type IndexedFile } from '../src/ranking';
+import { matchContentLine, rankFiles, retainContentMatch, RESULT_LIMIT, type IndexedFile } from '../src/ranking';
+import type { ContentMatch } from '../src/types';
 
 const file = (path: string, root = 'app'): IndexedFile => ({
   id: `${root}:${path}`, path, root, name: path.slice(path.lastIndexOf('/') + 1)
+});
+
+describe('streaming content relevance', () => {
+  it('finds fuzzy subsequences, rejects cross-line/nonmatches and reports UTF-16 character positions', () => {
+    const match = matchContentLine(file('main.ts'), 'fzndl', 8, '\u{1F600} const fuzzyNeedle = 1;');
+    expect(match?.location.line).toBe(8);
+    expect(match?.location.matches.map(index => match.location.text[index]).join('').toLowerCase()).toBe('fzndl');
+    expect(matchContentLine(file('main.ts'), 'missing', 0, 'const value = 1;')).toBeUndefined();
+  });
+  it('retains the best 200, not merely the first 200 encountered', () => {
+    const items: ContentMatch[] = [];
+    for (let line = 300; line >= 0; line--) {
+      const match = matchContentLine(file('main.ts'), 'needle', line, 'needle');
+      if (match) retainContentMatch(items, match);
+    }
+    expect(items).toHaveLength(200);
+    expect(items[0]?.location.line).toBe(0);
+    expect(items.at(-1)?.location.line).toBe(199);
+  });
 });
 const files = [
   file('src/game/Game.cppm'), file('src/main.cpp'), file('CMakeLists.txt'),

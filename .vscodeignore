@@ -3,7 +3,7 @@ test/**
 scripts/**
 .vscode/**
 .vscode-test/**
-node_modules/**
+node_modules/fuzzysort/**
 tsconfig.json
 esbuild.mjs
 vitest.config.mts

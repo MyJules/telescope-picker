@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { MatchLocation } from './types';
 
 const MAX_AUTO_PREVIEW_BYTES = 1024 * 1024;
 
@@ -13,6 +14,8 @@ export class EditorPreview {
   private readonly originalWasPreview: boolean;
   private readonly backgroundPreview: vscode.Uri | undefined;
   private replacedBackgroundPreview = false;
+  private decoration: vscode.TextEditorDecorationType | undefined;
+  private decoratedEditor: vscode.TextEditor | undefined;
 
   constructor(
     private readonly original: vscode.TextEditor | undefined,
@@ -28,7 +31,7 @@ export class EditorPreview {
     this.backgroundPreview = background?.input instanceof vscode.TabInputText ? background.input.uri : undefined;
   }
 
-  select(id: string): void {
+  select(id: string, location?: MatchLocation): void {
     if (this.mode !== 'active') return;
     this.suspend();
     const generation = this.generation;
@@ -46,13 +49,15 @@ export class EditorPreview {
           document = await vscode.workspace.openTextDocument(uri);
         }
         if (!this.current(generation)) return;
+        const selection = location ? this.matchRange(document, location) : undefined;
         const before = new Set(this.tabs());
         const background = this.backgroundPreview?.toString();
         const hadBackground = background && this.tabs().some(tab => this.isTextTab(tab, background));
         try {
-          await vscode.window.showTextDocument(document, {
-            viewColumn: this.column, preserveFocus: true, preview: true
+          const editor = await vscode.window.showTextDocument(document, {
+            viewColumn: this.column, preserveFocus: true, preview: true, ...(selection ? { selection } : {})
           });
+          if (location && this.current(generation)) this.highlight(editor, location);
           await this.waitForTabs(() => this.tabs().some(tab => this.isTextTab(tab, id)),
             'Could not confirm the temporary preview tab.');
         } finally {
@@ -61,6 +66,8 @@ export class EditorPreview {
           if (background && hadBackground
             && !this.tabs().some(tab => this.isTextTab(tab, background))) this.replacedBackgroundPreview = true;
         }
+      }, false).catch(reason => {
+        if (this.current(generation) && !(reason instanceof vscode.CancellationError)) this.onError(reason);
       });
     }, 35);
   }
@@ -69,14 +76,18 @@ export class EditorPreview {
     this.generation++;
     clearTimeout(this.timer);
     this.timer = undefined;
+    if (this.decoration && this.decoratedEditor) this.decoratedEditor.setDecorations(this.decoration, []);
+    this.decoratedEditor = undefined;
   }
 
-  async accept(uri: vscode.Uri, beside: boolean): Promise<void> {
+  async accept(uri: vscode.Uri, beside: boolean, location?: MatchLocation): Promise<void> {
     this.suspend();
     this.mode = 'accepting';
     try {
       await this.enqueue(async () => {
         if (this.mode !== 'accepting') throw new vscode.CancellationError();
+        const document = location ? await vscode.workspace.openTextDocument(uri) : undefined;
+        const selection = document && location ? this.matchRange(document, location) : undefined;
         if (beside) {
           await this.cleanup();
           await this.restoreBackgroundPreview();
@@ -84,14 +95,19 @@ export class EditorPreview {
         }
         if (this.mode !== 'accepting') throw new vscode.CancellationError();
         await vscode.window.showTextDocument(uri, {
-          viewColumn: beside ? vscode.ViewColumn.Beside : this.column, preserveFocus: false, preview: false
+          viewColumn: beside ? vscode.ViewColumn.Beside : this.column, preserveFocus: false, preview: false,
+          ...(selection ? { selection } : {})
         });
         await this.cleanup(beside ? undefined : uri.toString());
         if (!beside && await this.restoreBackgroundPreview() && this.mode === 'accepting')
           await vscode.window.showTextDocument(uri, {
-            viewColumn: this.column, preserveFocus: false, preview: false
+            viewColumn: this.column, preserveFocus: false, preview: false, ...(selection ? { selection } : {})
           });
-        if (this.mode === 'accepting') this.mode = 'accepted';
+        if (this.mode === 'accepting') {
+          this.mode = 'accepted';
+          this.decoration?.dispose();
+          this.decoration = undefined;
+        }
       }, false);
     } catch (reason) {
       if (this.mode === 'accepting') this.mode = 'active';
@@ -106,7 +122,29 @@ export class EditorPreview {
       await this.cleanup();
       await this.restoreBackgroundPreview();
       await this.restore(!restoreFocus);
-    }, false);
+    }, false).finally(() => {
+      this.decoration?.dispose();
+      this.decoration = undefined;
+    });
+  }
+
+  private matchRange(document: vscode.TextDocument, location: MatchLocation): vscode.Range {
+    if (location.line >= document.lineCount || document.lineAt(location.line).text !== location.text)
+      throw new Error('File contents changed since this match was found. Search again to refresh results.');
+    const character = location.matches[0] ?? 0;
+    return new vscode.Range(location.line, character, location.line, character);
+  }
+
+  private highlight(editor: vscode.TextEditor, location: MatchLocation): void {
+    const range = this.matchRange(editor.document, location);
+    this.decoration ??= vscode.window.createTextEditorDecorationType({
+      backgroundColor: new vscode.ThemeColor('editor.findMatchHighlightBackground'),
+      borderColor: new vscode.ThemeColor('editor.findMatchHighlightBorder'), borderWidth: '1px', borderStyle: 'solid'
+    });
+    editor.setDecorations(this.decoration, location.matches.map(character =>
+      new vscode.Range(location.line, character, location.line, character + 1)));
+    this.decoratedEditor = editor;
+    editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
   }
 
   private current(generation: number): boolean {

@@ -35,8 +35,10 @@ export async function run(): Promise<void> {
     assert.ok(indexed.files.every(file => !file.path.endsWith('.ignored')), 'files.exclude is respected');
     const first = indexed.files.find(file => file.root === 'First' && file.path === 'sample.ts');
     const second = indexed.files.find(file => file.root === 'Second' && file.path === 'sample.ts');
+    const diskContent = indexed.files.find(file => file.root === 'Second' && file.path === 'z-content.ts');
     assert.ok(first);
     assert.ok(second);
+    assert.ok(diskContent);
     const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(first.id));
     const originalText = document.getText();
     let editor = await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false });
@@ -115,6 +117,38 @@ export async function run(): Promise<void> {
       assert.equal(document.getText(), unsavedText);
       assertNoPickerTabs();
 
+      await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false });
+      await vscode.commands.executeCommand('telescopePicker.searchContents', 'unsvprvwfxtr137');
+      await until(() => editorAt(vscode.ViewColumn.One)?.document === document
+        && editorAt(vscode.ViewColumn.One)?.selection.start.line === 137,
+      'Content search previews a fuzzy subsequence match in unsaved text at the matching line');
+      assert.equal(document.getText(), unsavedText, 'Content previews do not alter dirty contents');
+      await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+      await until(() => vscode.window.activeTextEditor?.document === document
+        && vscode.window.activeTextEditor.selections.length === selections.length
+        && vscode.window.activeTextEditor.selections.every((selection, i) => selection.isEqual(selections[i]!)),
+      'Cancelling a content search restores the original selections');
+      await vscode.commands.executeCommand('telescopePicker.resume');
+      await until(() => editorAt(vscode.ViewColumn.One)?.selection.start.line === 137,
+        'Resume restores content mode and query');
+      await vscode.commands.executeCommand('telescopePicker.openBeside');
+      await until(() => vscode.window.activeTextEditor?.viewColumn === vscode.ViewColumn.Two
+        && vscode.window.activeTextEditor.document === document
+        && vscode.window.activeTextEditor.selection.start.line === 137,
+      'Content acceptance opens the exact matching line beside');
+      assert.ok(editorAt(vscode.ViewColumn.One)?.selections.every((selection, i) => selection.isEqual(selections[i]!)));
+
+      await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false });
+      await vscode.commands.executeCommand('telescopePicker.searchContents', 'dskcntndl93');
+      await until(() => editorAt(vscode.ViewColumn.One)?.document.uri.toString() === diskContent.id
+        && editorAt(vscode.ViewColumn.One)?.selection.start.line === 0,
+      'Packaged backend finds a fuzzy match in on-disk workspace contents');
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      await until(() => vscode.window.activeTextEditor?.document.uri.toString() === diskContent.id
+        && activeTab(vscode.ViewColumn.One)?.isPreview === false
+        && vscode.window.activeTextEditor.selection.start.line === 0,
+      'Content acceptance pins the selected file at the matching line');
+
       const cleanOriginal = await vscode.window.showTextDocument(vscode.Uri.joinPath(firstRoot.uri, 'hidden.ignored'), {
         viewColumn: vscode.ViewColumn.One, preview: true
       });
@@ -133,6 +167,6 @@ export async function run(): Promise<void> {
       assert.ok(await vscode.workspace.applyEdit(restore));
       await vscode.commands.executeCommand('workbench.action.files.revert');
     }
-    console.log('Extension-host checks passed: native popup, multi-root/exclusions, current-editor preview, dirty contents, cancel/selection/scroll restoration, background/unpinned preview restoration, temporary-tab cleanup, resume, Enter pinning and split.');
+    console.log('Extension-host checks passed: native popup, multi-root/exclusions, current-editor preview, dirty contents, cancel/selection/scroll restoration, background/unpinned preview restoration, temporary-tab cleanup, resume, Enter pinning, split, streaming fuzzy content search, dirty-text matching and exact-line acceptance.');
   } finally { provider.dispose(); }
 }

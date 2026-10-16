@@ -6,7 +6,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 await runTests({
   version: process.env.VSCODE_TEST_VERSION ?? '1.95.3',
   vscodeExecutablePath: process.env.VSCODE_EXECUTABLE_PATH,
-  extensionDevelopmentPath: root,
+  extensionDevelopmentPath: process.env.TELESCOPE_TEST_EXTENSION_PATH ?? root,
   extensionTestsPath: path.join(root, 'dist', 'test', 'host.js'),
   launchArgs: [
     path.join(root, 'test', 'fixtures', 'picker.code-workspace'),

@@ -40,21 +40,8 @@ export class FileProvider implements vscode.Disposable {
     if (this.pending) return this.pending;
     const cancellation = new vscode.CancellationTokenSource();
     this.cancellation = cancellation;
-    const folders = vscode.workspace.workspaceFolders ?? [];
-    const promise = Promise.all(folders.map(async folder => {
-      const uris = await vscode.workspace.findFiles(
-        new vscode.RelativePattern(folder, '**/*'), undefined, INDEX_LIMIT + 1, cancellation.token);
-      return uris.map(uri => {
-        const owner = vscode.workspace.getWorkspaceFolder(uri) ?? folder;
-        const path = vscode.workspace.asRelativePath(uri, false).replaceAll('\\', '/');
-        const duplicateName = folders.filter(candidate => candidate.name === owner.name).length > 1;
-        const root = duplicateName ? `${owner.name} (${owner.uri.toString(true)})` : owner.name;
-        return { id: uri.toString(), path, root, name: path.slice(path.lastIndexOf('/') + 1) };
-      });
-    })).then(groups => {
+    const promise = this.discover(cancellation.token, INDEX_LIMIT + 1).then(all => {
       if (cancellation.token.isCancellationRequested) throw new vscode.CancellationError();
-      const unique = new Map(groups.flat().map(file => [file.id, file]));
-      const all = [...unique.values()].sort((a, b) => a.path.localeCompare(b.path) || a.id.localeCompare(b.id));
       const result = { files: all.slice(0, INDEX_LIMIT), truncated: all.length > INDEX_LIMIT };
       this.cache = result;
       return result;
@@ -67,6 +54,24 @@ export class FileProvider implements vscode.Disposable {
     });
     this.pending = promise;
     return promise;
+  }
+
+  async discover(token: vscode.CancellationToken, maxPerRoot?: number): Promise<IndexedFile[]> {
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    const groups = await Promise.all(folders.map(async folder => {
+      const uris = await vscode.workspace.findFiles(
+        new vscode.RelativePattern(folder, '**/*'), undefined, maxPerRoot, token);
+      return uris.map(uri => {
+        const owner = vscode.workspace.getWorkspaceFolder(uri) ?? folder;
+        const path = vscode.workspace.asRelativePath(uri, false).replaceAll('\\', '/');
+        const duplicateName = folders.filter(candidate => candidate.name === owner.name).length > 1;
+        const root = duplicateName ? `${owner.name} (${owner.uri.toString(true)})` : owner.name;
+        return { id: uri.toString(), path, root, name: path.slice(path.lastIndexOf('/') + 1) };
+      });
+    }));
+    if (token.isCancellationRequested) throw new vscode.CancellationError();
+    const unique = new Map(groups.flat().map(file => [file.id, file]));
+    return [...unique.values()].sort((a, b) => a.path.localeCompare(b.path) || a.id.localeCompare(b.id));
   }
 
   dispose(): void {

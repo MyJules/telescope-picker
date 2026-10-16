@@ -1,8 +1,8 @@
 import * as esbuild from 'esbuild';
 
 const builds = [
-  { entryPoints: ['src/extension.ts'], outfile: 'dist/extension.js', platform: 'node', format: 'cjs', external: ['vscode'] },
-  { entryPoints: ['test/host/index.ts'], outfile: 'dist/test/host.js', platform: 'node', format: 'cjs', external: ['vscode'] }
+  { entryPoints: ['src/extension.ts'], outfile: 'dist/extension.js', platform: 'node', format: 'cjs', external: ['vscode', '@vscode/ripgrep'] },
+  { entryPoints: ['test/host/index.ts'], outfile: 'dist/test/host.js', platform: 'node', format: 'cjs', external: ['vscode', '@vscode/ripgrep'] }
 ];
 for (const build of builds) {
   const context = await esbuild.context({ bundle: true, sourcemap: true, target: 'es2022', ...build });

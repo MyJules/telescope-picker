@@ -1,8 +1,8 @@
 {
   "name": "telescope-picker",
   "displayName": "Telescope Picker",
-  "description": "A native fuzzy file popup with live previews in the current code editor.",
-  "version": "0.3.0",
+  "description": "Native fuzzy file and file-content search with live previews in the current code editor.",
+  "version": "0.4.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -29,6 +29,11 @@
       {
         "command": "telescopePicker.files",
         "title": "Find Files",
+        "category": "Telescope Picker"
+      },
+      {
+        "command": "telescopePicker.searchContents",
+        "title": "Search File Contents",
         "category": "Telescope Picker"
       },
       {
@@ -110,9 +115,10 @@
     "test:host": "npm run build && node scripts/test-host.mjs",
     "benchmark": "tsx scripts/benchmark.ts",
     "vscode:prepublish": "npm run typecheck && npm run build",
-    "package": "vsce package --allow-missing-repository"
+    "package": "node scripts/package.mjs"
   },
   "dependencies": {
+    "@vscode/ripgrep": "^1.18.0",
     "fuzzysort": "^4.0.2"
   },
   "devDependencies": {
