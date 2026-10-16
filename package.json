@@ -2,7 +2,7 @@
   "name": "telescope-picker",
   "displayName": "Telescope Picker",
   "description": "Fuzzy file picking and fast text search with live previews in the current code editor.",
-  "version": "0.10.2",
+  "version": "0.11.1",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -27,6 +27,12 @@
   },
   "contributes": {
     "commands": [
+      {
+        "command": "telescopePicker.searchGitDiffs",
+        "title": "Browse Git Changes",
+        "category": "Telescope Picker",
+        "icon": "$(git-compare)"
+      },
       {
         "command": "telescopePicker.searchCurrentFile",
         "title": "Search Current File",
@@ -72,6 +78,13 @@
       }
     ],
     "menus": {
+      "scm/title": [
+        {
+          "command": "telescopePicker.searchGitDiffs",
+          "when": "scmProvider == git",
+          "group": "navigation"
+        }
+      ],
       "commandPalette": [
         {
           "command": "telescopePicker.next",

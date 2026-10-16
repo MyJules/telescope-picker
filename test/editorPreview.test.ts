@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { EditorPreview } from '../src/editorPreview';
-import { createDocument, editorSettings, resetEditors, window, workspace } from './vscode';
+import { commands, createDocument, editorSettings, resetEditors, window, workspace } from './vscode';
 
 let preview: EditorPreview;
 let original: vscode.TextEditor;
@@ -68,6 +68,90 @@ it('rejects changed content locations instead of navigating to a stale line', as
   expect(window.showTextDocument).not.toHaveBeenCalled();
   await expect(preview.accept(document.uri, false, location)).rejects.toThrow('contents changed');
   expect(window.showTextDocument).not.toHaveBeenCalled();
+});
+it.each([false, true])('opens native Git diffs without a custom merge UI, beside=%s', async beside => {
+  const uri = vscode.Uri.parse('git:/workspace/target.ts?HEAD');
+  const document = createDocument(uri, false, 'removedNeedle');
+  workspace.textDocuments.push(document);
+  await preview.accept(uri, beside, { line: 0, text: 'removedNeedle', matches: [0] }, {
+    left: uri.toString(), right: target, title: 'target.ts (Staged)', side: 'removed',
+    modifiedLine: 2, emptyLeft: false, emptyRight: true
+  });
+  expect(commands.executeCommand).toHaveBeenCalledWith('vscode.diff', uri, expect.objectContaining({
+    value: 'telescope-picker-empty:/empty'
+  }), 'target.ts (Staged)', {
+    viewColumn: beside ? vscode.ViewColumn.Beside : vscode.ViewColumn.One,
+    preserveFocus: false, preview: false, selection: new vscode.Range(2, 0, 2, 0)
+  });
+});
+it('previews historical Git matches without filesystem stat and cleans their tabs on cancel', async () => {
+  const uri = vscode.Uri.parse('git:/workspace/target.ts?HEAD');
+  workspace.openTextDocument.mockResolvedValueOnce(createDocument(uri, false, 'oldNeedle'));
+  workspace.fs.stat.mockClear();
+  preview.select(uri.toString(), { line: 0, text: 'oldNeedle', matches: [0] });
+  await vi.advanceTimersByTimeAsync(40);
+  expect(workspace.fs.stat).not.toHaveBeenCalled();
+  expect(window.activeTextEditor?.document.uri.toString()).toBe(uri.toString());
+  await preview.finish(true);
+  expect(window.activeTextEditor?.document).toBe(original.document);
+});
+
+it('previews native diff hunks immediately without stealing picker focus, then cleans up on cancel', async () => {
+  const document = createDocument(vscode.Uri.parse(target), false, 'first\ncontext\nlast');
+  workspace.textDocuments.push(document);
+  const diff = {
+    left: 'git:/workspace/target.ts?index', right: target, title: 'target.ts (Unstaged)',
+    side: 'added' as const, modifiedLine: 0, emptyLeft: false, emptyRight: false
+  };
+  preview.select(target, { line: 0, text: 'first', matches: [] }, diff);
+  await vi.advanceTimersByTimeAsync(40);
+  expect(window.tabGroups.all[0]?.activeTab?.input).toBeInstanceOf(vscode.TabInputTextDiff);
+  expect(commands.executeCommand).toHaveBeenCalledWith('vscode.diff', expect.anything(), expect.anything(),
+    diff.title, expect.objectContaining({ preserveFocus: true, preview: true }));
+  preview.select(target, { line: 2, text: 'last', matches: [] }, { ...diff, modifiedLine: 2 });
+  await vi.advanceTimersByTimeAsync(40);
+  expect(window.activeTextEditor?.selection.start.line).toBe(2);
+  expect(window.tabGroups.all[0]?.tabs.filter(tab => tab.input instanceof vscode.TabInputTextDiff)).toHaveLength(1);
+  await preview.finish(true);
+  expect(window.tabGroups.all[0]?.tabs.some(tab => tab.input instanceof vscode.TabInputTextDiff)).toBe(false);
+  expect(window.activeTextEditor?.document).toBe(original.document);
+});
+
+it.each([false, true])('keeps an accepted native diff open with editor preview tabs enabled=%s', async enabled => {
+  editorSettings.previewEnabled = enabled;
+  const document = createDocument(vscode.Uri.parse(target), false, 'first');
+  workspace.textDocuments.push(document);
+  const diff = {
+    left: 'git:/workspace/target.ts?index', right: target, title: 'target.ts (Unstaged)',
+    side: 'added' as const, modifiedLine: 0, emptyLeft: false, emptyRight: false
+  };
+  const location = { line: 0, text: 'first', matches: [] };
+  preview.select(target, location, diff);
+  await vi.advanceTimersByTimeAsync(40);
+  await preview.accept(document.uri, false, location, diff);
+  expect(window.tabGroups.all[0]?.activeTab?.input).toBeInstanceOf(vscode.TabInputTextDiff);
+  expect(window.tabGroups.all[0]?.activeTab?.isPreview).toBe(false);
+});
+
+it('restores the original editor after cancellation during an uncancellable native diff open', async () => {
+  const execute = commands.executeCommand.getMockImplementation();
+  if (!execute) throw new Error('Missing native command mock');
+  let complete: (() => void) | undefined;
+  commands.executeCommand.mockImplementationOnce(async (command, ...args) => {
+    await new Promise<void>(done => { complete = done; });
+    return execute(command, ...args);
+  });
+  preview.select(target, undefined, {
+    left: 'git:/workspace/target.ts?index', right: target, title: 'Binary change',
+    side: 'added', modifiedLine: 0, emptyLeft: false, emptyRight: false, metadataOnly: true
+  });
+  await vi.advanceTimersByTimeAsync(40);
+  const finished = preview.finish(true);
+  if (!complete) throw new Error('Expected pending native diff open');
+  complete();
+  await finished;
+  expect(window.tabGroups.all[0]?.tabs.some(tab => tab.input instanceof vscode.TabInputTextDiff)).toBe(false);
+  expect(window.activeTextEditor?.document).toBe(original.document);
 });
 it('restores document, dirty state, selections and visible range and closes temporary tabs', async () => {
   preview.select(target);

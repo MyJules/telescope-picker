@@ -1,6 +1,10 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import { FileProvider } from '../../src/files';
+import { GitChangesProvider, type GitAPI } from '../../src/gitChanges';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 async function until(check: () => boolean | Promise<boolean>, label: string): Promise<void> {
   const deadline = Date.now() + 10_000;
@@ -30,11 +34,125 @@ export async function run(): Promise<void> {
   try {
     await configuration.update('iconTheme', process.env.TELESCOPE_TEST_ICON_THEME ?? 'picker-test-icons', vscode.ConfigurationTarget.Global);
     await checkPicker();
+    await checkGitDiffs();
     const commands = await vscode.commands.getCommands(true);
     assert.ok(commands.includes('telescopePicker.configureShortcuts'), 'Shortcut configuration command is registered');
     await vscode.commands.executeCommand('telescopePicker.configureShortcuts');
   } finally {
     await configuration.update('iconTheme', previous, vscode.ConfigurationTarget.Global);
+  }
+}
+
+async function checkGitDiffs(): Promise<void> {
+  type Repository = GitAPI['repositories'][number] & { status(): Promise<void> };
+  type API = GitAPI & { openRepository(root: vscode.Uri): Promise<Repository | null> };
+  const extension = vscode.extensions.getExtension<{ getAPI(version: 1): API }>('vscode.git');
+  assert.ok(extension, 'Built-in Git extension is available');
+  const api = (await extension.activate()).getAPI(1);
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  assert.ok(folder, 'Git fixture requires a workspace folder');
+  const directory = await mkdtemp(join(folder.uri.fsPath, 'telescope-git-host-'));
+  const git = (...args: string[]): void => {
+    execFileSync(api.git.path, args, { cwd: directory, stdio: 'pipe' });
+  };
+  const provider = new GitChangesProvider();
+  try {
+    git('init', '--initial-branch=main');
+    git('config', 'user.name', 'Picker Test');
+    git('config', 'user.email', 'test@example.invalid');
+    git('config', 'core.autocrlf', 'false');
+    const context = Array.from({ length: 12 }, (_, line) => `// unchanged ${line}`).join('\n');
+    await writeFile(join(directory, 'changed.ts'), `const gitRemovedNeedle = 1;\n${context}\nconst gitRemovedTail = 7;\n`);
+    git('add', '.');
+    git('commit', '-qm', 'fixture');
+    await writeFile(join(directory, 'changed.ts'), `const gitStagedNeedle = 2;\n${context}\nconst gitRemovedTail = 7;\n`);
+    git('add', '.');
+    await writeFile(join(directory, 'changed.ts'), `const gitWorkingNeedle = 3;\n${context}\nconst gitWorkingTail = 8;\n`);
+    await writeFile(join(directory, 'untracked.ts'), 'const gitUntrackedNeedle = 4;\n');
+    const repository = await api.openRepository(vscode.Uri.file(directory));
+    assert.ok(repository, 'Git API opens the isolated fixture repository');
+    await repository.status();
+    for (const needle of ['gitRemovedNeedle', 'gitWorkingNeedle', 'gitUntrackedNeedle']) {
+      let found = 0;
+      await provider.search(needle, update => { if (update.complete) found = update.total; });
+      assert.equal(found, 1, `Public Git API search finds ${needle}`);
+    }
+    let allHunks = 0;
+    await provider.search('', update => { if (update.complete) allHunks = update.total; });
+    assert.equal(allHunks, 4, 'An empty query lists all staged, unstaged and untracked hunks immediately');
+    await vscode.commands.executeCommand('telescopePicker.searchGitDiffs');
+    await until(() => vscode.window.visibleTextEditors.some(editor =>
+      editor.document.uri.scheme === 'git' && editor.document.getText().includes('gitRemovedNeedle')),
+    'Opening the Git browser immediately previews the first native diff');
+    assert.ok(vscode.window.tabGroups.all.some(group => group.activeTab?.isPreview
+      && group.activeTab.input instanceof vscode.TabInputTextDiff), 'Native diff appears before pressing Enter');
+    assert.equal(await vscode.commands.executeCommand('telescopePicker.next'), true);
+    await until(() => vscode.window.tabGroups.all.some(group => group.activeTab?.input instanceof vscode.TabInputTextDiff
+      && group.activeTab.input.modified.scheme === 'file'), 'Navigating previews the next hunk as a native diff');
+    const workingDiff = vscode.window.tabGroups.all.find(group =>
+      group.activeTab?.input instanceof vscode.TabInputTextDiff && group.activeTab.input.modified.scheme === 'file')?.activeTab;
+    assert.equal(await vscode.commands.executeCommand('telescopePicker.next'), true);
+    await until(() => vscode.window.visibleTextEditors.some(editor => editor.document.uri.scheme === 'file'
+      && editor.document.uri.path.endsWith('/changed.ts') && editor.selection.start.line === 13),
+    'The next hunk jumps to its exact line in the existing native diff');
+    assert.ok(vscode.window.tabGroups.all.some(group => group.activeTab === workingDiff),
+      'Hunks in the same file reuse the same native diff tab');
+    assert.equal(await vscode.commands.executeCommand('telescopePicker.previous'), true);
+    assert.equal(await vscode.commands.executeCommand('telescopePicker.previous'), true);
+    await until(() => vscode.window.tabGroups.all.some(group => group.activeTab?.input instanceof vscode.TabInputTextDiff
+      && group.activeTab.input.modified.scheme === 'git'), 'Navigating back previews the staged hunk');
+    await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+    await until(() => vscode.window.tabGroups.all.some(group =>
+      group.activeTab?.input instanceof vscode.TabInputTextDiff && !group.activeTab.isPreview), 'Enter pins the native diff editor');
+    const diff = vscode.window.tabGroups.all.flatMap(group => group.tabs)
+      .find(tab => tab.input instanceof vscode.TabInputTextDiff && tab.label.includes('Staged'));
+    assert.ok(diff?.input instanceof vscode.TabInputTextDiff, 'Staged diff uses the native tab type');
+    assert.equal(diff.input.original.scheme, 'git');
+    assert.equal(diff.input.modified.scheme, 'git', 'Staged diff compares HEAD to index, not working tree');
+    const historicalUri = diff.input.original.toString();
+    await vscode.commands.executeCommand('telescopePicker.searchGitDiffs', 'gitUntrackedNeedle');
+    assert.ok(vscode.window.tabGroups.all.every(group => group.tabs.every(tab =>
+      !(tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === historicalUri))),
+    'Accepting a native diff closes its temporary historical text preview');
+    const samePath = (path: string): boolean => process.platform === 'win32'
+      ? path.toLowerCase() === join(directory, 'untracked.ts').toLowerCase()
+      : path === join(directory, 'untracked.ts');
+    await until(() => vscode.window.visibleTextEditors.some(editor =>
+      editor.document.uri.scheme === 'file' && samePath(editor.document.uri.fsPath)), 'Untracked line preview');
+    await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+    await until(() => vscode.window.tabGroups.all.some(group => group.activeTab?.input instanceof vscode.TabInputTextDiff
+      && group.activeTab.label.includes('Staged')), 'Cancelling Git search restores the original native diff tab');
+    await vscode.commands.executeCommand('telescopePicker.searchGitDiffs', 'gitUntrackedNeedle');
+    await until(() => vscode.window.visibleTextEditors.some(editor =>
+      editor.document.uri.scheme === 'file' && samePath(editor.document.uri.fsPath)), 'Untracked preview after diff restoration');
+    await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+    await until(() => vscode.window.tabGroups.all.some(group =>
+      group.activeTab?.input instanceof vscode.TabInputTextDiff
+      && group.activeTab.input.original.scheme === 'telescope-picker-empty'), 'Untracked diff uses an empty original side');
+    git('add', '.');
+    git('commit', '-qm', 'saved fixture');
+    git('checkout', '-qb', 'other');
+    await writeFile(join(directory, 'changed.ts'), 'const theirsConflictNeedle = 5;\n');
+    git('commit', '-qam', 'theirs');
+    git('checkout', '-q', 'main');
+    await writeFile(join(directory, 'changed.ts'), 'const oursConflictNeedle = 6;\n');
+    git('commit', '-qam', 'ours');
+    assert.throws(() => git('merge', 'other'), 'Fixture creates a real merge conflict');
+    await repository.status();
+    await vscode.commands.executeCommand('telescopePicker.searchGitDiffs', 'gitWorkingNeedle');
+    await until(() => vscode.window.tabGroups.all.some(group =>
+      group.activeTab?.input instanceof vscode.TabInputTextDiff
+      && group.activeTab.input.original.query.includes(':1')), 'Conflicts preview the native merge-base diff');
+    await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+    await until(() => vscode.window.tabGroups.all.some(group =>
+      group.activeTab?.input instanceof vscode.TabInputTextDiff
+      && group.activeTab.input.original.query.includes(':1')), 'Conflict result opens a native merge-base diff');
+    console.log('Git checks passed: public Git API, staged/unstaged/untracked/conflict text, historical previews, diff restoration, native diff editors.');
+  } finally {
+    provider.dispose();
+    await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    await rm(directory, { recursive: true, maxRetries: 5, retryDelay: 100 });
   }
 }
 

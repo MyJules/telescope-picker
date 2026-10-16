@@ -17,4 +17,17 @@ export interface ContentMatch {
   path: string;
   root: string;
   location: MatchLocation;
+  diff?: DiffTarget;
+}
+
+export interface DiffTarget {
+  left: string;
+  right: string;
+  title: string;
+  side: 'added' | 'removed';
+  modifiedLine: number;
+  emptyLeft: boolean;
+  emptyRight: boolean;
+  hunk?: string;
+  metadataOnly?: boolean;
 }

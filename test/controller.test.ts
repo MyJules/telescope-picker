@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { PickerController } from '../src/controller';
 import { ContentProvider, type ContentUpdate } from '../src/contents';
 import { createContentMatcher } from '../src/ranking';
+import { GitChangesProvider } from '../src/gitChanges';
 import { commands, configurationChanged, createDocument, documentChanged, fileCreated, MockQuickPick, resetEditors, settings, window, workspace, Uri } from './vscode';
 
 class State implements vscode.Memento {
@@ -49,6 +50,97 @@ beforeEach(async () => {
   picker = window.createQuickPick.mock.results.at(-1)?.value ?? new MockQuickPick();
 });
 afterEach(() => { controller.dispose(); vi.restoreAllMocks(); });
+
+it('lists Git hunks without a query, opens the native diff and resumes', async () => {
+  const search = vi.spyOn(GitChangesProvider.prototype, 'search').mockImplementation(async (query, update) => {
+    const match = createContentMatcher(query || 'unsaved')({
+      id: original.document.uri.toString(), path: 'original.ts', root: 'workspace · Unstaged', name: 'original.ts'
+    }, 0, original.document.lineAt(0).text);
+    if (!match) throw new Error('Missing Git fixture match');
+    update({ items: [{ ...match, diff: {
+      left: 'git:/workspace/original.ts?index', right: original.document.uri.toString(),
+      title: 'original.ts (Unstaged)', side: 'added', modifiedLine: 0, emptyLeft: false, emptyRight: false,
+      hunk: '@@ -1 +1 @@ · +1 / -1 · const unsaved = 1;'
+    } }], total: 1, complete: true, searchedRoots: 1, roots: 1, binary: 0, unsupported: 0 });
+  });
+  await controller.show(false, 'gitDiffs');
+  expect(contentItems()).toHaveLength(1);
+  expect(search).toHaveBeenCalledWith('', expect.any(Function));
+  picker.value = 'unsaved';
+  await vi.waitFor(() => expect(contentItems()).toHaveLength(1));
+  expect(contentItems()[0]?.label).toMatch(/^@@/);
+  expect(contentItems()[0]?.description).toContain('Unstaged');
+  expect(picker.title).toContain('Git Changes · 1 hunks / changes');
+  await controller.openBeside();
+  expect(commands.executeCommand).toHaveBeenCalledWith('vscode.diff', expect.anything(), expect.anything(),
+    'original.ts (Unstaged)', expect.objectContaining({ viewColumn: vscode.ViewColumn.Beside }));
+  await controller.show(true);
+  picker = window.createQuickPick.mock.results.at(-1)?.value ?? new MockQuickPick();
+  expect(picker.value).toBe('unsaved');
+  expect(search).toHaveBeenCalledTimes(3);
+});
+
+it('clears an existing filter when opening the Git hunk browser', async () => {
+  const search = vi.spyOn(GitChangesProvider.prototype, 'search').mockImplementation(async (_query, update) => {
+    update({ items: [], total: 0, complete: true, searchedRoots: 1, roots: 1, binary: 0, unsupported: 0 });
+  });
+  picker.value = 'oldFilter';
+  await controller.show(false, 'gitDiffs');
+  expect(picker.value).toBe('');
+  expect(search).toHaveBeenLastCalledWith('', expect.any(Function));
+  expect(picker.items[0]?.label).toBe('No Git changes.');
+});
+
+it('orders deletion and addition hunks by the modified-side jump location', async () => {
+  vi.spyOn(GitChangesProvider.prototype, 'search').mockImplementation(async (_query, update) => {
+    update({
+      items: [
+        { id: 'earlier-deletion', oldLine: 200, newLine: 10, side: 'removed' as const },
+        { id: 'later-addition', oldLine: 50, newLine: 50, side: 'added' as const }
+      ].map(item => ({
+        id: item.id, uri: original.document.uri.toString(), path: 'original.ts', root: 'workspace · Unstaged',
+        location: { line: item.oldLine, text: '', matches: [] },
+        diff: {
+          left: 'git:/workspace/original.ts?index', right: original.document.uri.toString(),
+          title: 'original.ts (Unstaged)', side: item.side, modifiedLine: item.newLine,
+          emptyLeft: false, emptyRight: false, hunk: item.id
+        }
+      })),
+      total: 2, complete: true, searchedRoots: 1, roots: 1, binary: 0, unsupported: 0
+    });
+  });
+  await controller.show(false, 'gitDiffs');
+  expect(contentItems().map(item => item.id)).toEqual(['earlier-deletion', 'later-addition']);
+});
+
+it('applies an explicit new query when invoking an already-open search mode', async () => {
+  await controller.show(false, 'currentFile', 'unsaved');
+  expect(contentItems()).toHaveLength(1);
+  await controller.show(false, 'currentFile', 'missingNeedle');
+  expect(picker.value).toBe('missingNeedle');
+  expect(picker.items[0]?.label).toBe('No matching text.');
+});
+
+it('waits for acceptance before opening a new picker so its first request is not lost', async () => {
+  let release: (() => void) | undefined;
+  const show = window.showTextDocument.getMockImplementation();
+  if (!show) throw new Error('Missing editor mock');
+  window.showTextDocument.mockImplementationOnce(async (document, options) => {
+    await new Promise<void>(done => { release = done; });
+    return show(document, options);
+  });
+  const accepting = controller.openBeside();
+  await vi.waitFor(() => expect(release).toBeDefined());
+  const opening = controller.show(false, 'currentFile', 'unsaved');
+  if (!release) throw new Error('Expected pending acceptance');
+  release();
+  await accepting;
+  await opening;
+  const next: MockQuickPick = window.createQuickPick.mock.results.at(-1)?.value;
+  expect(next).not.toBe(picker);
+  expect(next.value).toBe('unsaved');
+  expect(next.items.filter(item => item.id)).toHaveLength(1);
+});
 
 it('searches only the original current document including unsaved text without a workspace', async () => {
   workspace.workspaceFolders = [];

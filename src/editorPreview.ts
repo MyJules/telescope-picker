@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { MatchLocation } from './types';
+import type { DiffTarget, MatchLocation } from './types';
 
 const MAX_AUTO_PREVIEW_BYTES = 1024 * 1024;
 
@@ -16,7 +16,9 @@ export class EditorPreview {
   private readonly selections: readonly vscode.Selection[];
   private readonly visibleRange: vscode.Range | undefined;
   private readonly originalWasPreview: boolean;
+  private readonly originalDiff: { original: vscode.Uri; modified: vscode.Uri; title: string } | undefined;
   private readonly backgroundPreview: vscode.Uri | undefined;
+  private readonly backgroundDiff: { original: vscode.Uri; modified: vscode.Uri; title: string } | undefined;
   private replacedBackgroundPreview = false;
   private decoration: vscode.TextEditorDecorationType | undefined;
   private decoratedEditor: vscode.TextEditor | undefined;
@@ -30,12 +32,19 @@ export class EditorPreview {
     this.visibleRange = original?.visibleRanges[0];
     const group = vscode.window.tabGroups.all.find(candidate => candidate.viewColumn === column);
     this.originalWasPreview = group?.activeTab?.isPreview ?? false;
+    const input = group?.activeTab?.input;
+    if (input instanceof vscode.TabInputTextDiff) this.originalDiff = {
+      original: input.original, modified: input.modified, title: group?.activeTab?.label ?? 'Diff'
+    };
     const background = group?.tabs.find(tab => tab.isPreview && tab.input instanceof vscode.TabInputText
       && tab.input.uri.toString() !== original?.document.uri.toString());
     this.backgroundPreview = background?.input instanceof vscode.TabInputText ? background.input.uri : undefined;
+    const diff = group?.tabs.find(tab => tab.isPreview && tab !== group.activeTab && tab.input instanceof vscode.TabInputTextDiff);
+    if (diff?.input instanceof vscode.TabInputTextDiff)
+      this.backgroundDiff = { original: diff.input.original, modified: diff.input.modified, title: diff.label };
   }
 
-  select(id: string, location?: MatchLocation): void {
+  select(id: string, location?: MatchLocation, diff?: DiffTarget): void {
     if (this.mode !== 'active') return;
     this.suspend();
     const generation = this.generation;
@@ -45,30 +54,34 @@ export class EditorPreview {
         if (!this.current(generation)) return;
         const uri = vscode.Uri.parse(id);
         let document = vscode.workspace.textDocuments.find(candidate => candidate.uri.toString() === id);
-        if (!document) {
-          const stat = await vscode.workspace.fs.stat(uri);
-          if (!this.current(generation)) return;
-          if (stat.size > MAX_AUTO_PREVIEW_BYTES)
-            throw new PreviewTooLargeError();
+        if (!document && !diff?.metadataOnly) {
+          if (uri.scheme !== 'git') {
+            const stat = await vscode.workspace.fs.stat(uri);
+            if (!this.current(generation)) return;
+            if (stat.size > MAX_AUTO_PREVIEW_BYTES) throw new PreviewTooLargeError();
+          }
           document = await vscode.workspace.openTextDocument(uri);
+          if (document.getText().length > MAX_AUTO_PREVIEW_BYTES) throw new PreviewTooLargeError();
         }
         if (!this.current(generation)) return;
-        const selection = location ? this.matchRange(document, location) : undefined;
+        const selection = document && location && !diff?.metadataOnly ? this.matchRange(document, location) : undefined;
         const before = new Set(this.tabs());
-        const background = this.backgroundPreview?.toString();
-        const hadBackground = background && this.tabs().some(tab => this.isTextTab(tab, background));
+        const hadBackground = this.hasBackgroundPreview();
         try {
-          const editor = await vscode.window.showTextDocument(document, {
-            viewColumn: this.column, preserveFocus: true, preview: true, ...(selection ? { selection } : {})
-          });
-          if (location && this.current(generation)) this.highlight(editor, location);
-          await this.waitForTabs(() => this.tabs().some(tab => this.isTextTab(tab, id)),
+          if (diff) await this.openDiff(diff, this.column, true, true);
+          else {
+            if (!document) throw new Error('Could not load the preview document.');
+            const editor = await vscode.window.showTextDocument(document, {
+              viewColumn: this.column, preserveFocus: true, preview: true, ...(selection ? { selection } : {})
+            });
+            if (location && this.current(generation)) this.highlight(editor, location);
+          }
+          await this.waitForTabs(() => this.tabs().some(tab => this.isPreviewTab(tab, id, diff)),
             'Could not confirm the temporary preview tab.');
         } finally {
-          for (const tab of this.tabs()) if (!before.has(tab) && this.isTextTab(tab, id))
+          for (const tab of this.tabs()) if (!before.has(tab) && this.isPreviewTab(tab, id, diff))
             this.ownedTabs.set(tab, tab.isPreview);
-          if (background && hadBackground
-            && !this.tabs().some(tab => this.isTextTab(tab, background))) this.replacedBackgroundPreview = true;
+          if (hadBackground && !this.hasBackgroundPreview()) this.replacedBackgroundPreview = true;
         }
       }, false).catch(reason => {
         if (this.current(generation) && !(reason instanceof vscode.CancellationError)) this.onError(reason);
@@ -84,13 +97,13 @@ export class EditorPreview {
     this.decoratedEditor = undefined;
   }
 
-  async accept(uri: vscode.Uri, beside: boolean, location?: MatchLocation): Promise<void> {
+  async accept(uri: vscode.Uri, beside: boolean, location?: MatchLocation, diff?: DiffTarget): Promise<void> {
     this.suspend();
     this.mode = 'accepting';
     try {
       await this.enqueue(async () => {
         if (this.mode !== 'accepting') throw new vscode.CancellationError();
-        const document = location ? await vscode.workspace.openTextDocument(uri) : undefined;
+        const document = location && !diff?.metadataOnly ? await vscode.workspace.openTextDocument(uri) : undefined;
         const selection = document && location ? this.matchRange(document, location) : undefined;
         if (beside) {
           await this.cleanup();
@@ -98,15 +111,18 @@ export class EditorPreview {
           await this.restore(false);
         }
         if (this.mode !== 'accepting') throw new vscode.CancellationError();
-        await vscode.window.showTextDocument(uri, {
-          viewColumn: beside ? vscode.ViewColumn.Beside : this.column, preserveFocus: false, preview: false,
-          ...(selection ? { selection } : {})
-        });
-        await this.cleanup(beside ? undefined : uri.toString());
-        if (!beside && await this.restoreBackgroundPreview() && this.mode === 'accepting')
-          await vscode.window.showTextDocument(uri, {
-            viewColumn: this.column, preserveFocus: false, preview: false, ...(selection ? { selection } : {})
+        const open = async (): Promise<void> => {
+          const viewColumn = beside ? vscode.ViewColumn.Beside : this.column;
+          if (diff) {
+            await this.openDiff(diff, viewColumn, false, false);
+          } else await vscode.window.showTextDocument(uri, {
+            viewColumn, preserveFocus: false, preview: false, ...(selection ? { selection } : {})
           });
+        };
+        await open();
+        await this.cleanup(beside || diff ? undefined : uri.toString(), beside ? undefined : diff);
+        if (!beside && await this.restoreBackgroundPreview() && this.mode === 'accepting')
+          await open();
         if (this.mode === 'accepting') {
           this.mode = 'accepted';
           this.decoration?.dispose();
@@ -172,10 +188,38 @@ export class EditorPreview {
     return tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === id;
   }
 
-  private async cleanup(keepId?: string): Promise<void> {
+  private diffUris(diff: DiffTarget): { original: vscode.Uri; modified: vscode.Uri } {
+    const empty = vscode.Uri.parse('telescope-picker-empty:/empty');
+    return {
+      original: diff.emptyLeft ? empty : vscode.Uri.parse(diff.left),
+      modified: diff.emptyRight ? empty : vscode.Uri.parse(diff.right)
+    };
+  }
+
+  private isPreviewTab(tab: vscode.Tab, id: string, diff?: DiffTarget): boolean {
+    if (!diff) return this.isTextTab(tab, id);
+    const uris = this.diffUris(diff);
+    return tab.input instanceof vscode.TabInputTextDiff
+      && tab.input.original.toString() === uris.original.toString()
+      && tab.input.modified.toString() === uris.modified.toString();
+  }
+
+  private async openDiff(diff: DiffTarget, viewColumn: vscode.ViewColumn, preserveFocus: boolean, preview: boolean): Promise<void> {
+    const uris = this.diffUris(diff);
+    await vscode.commands.executeCommand('vscode.diff', uris.original, uris.modified, diff.title, {
+      viewColumn, preserveFocus, preview,
+      selection: new vscode.Range(diff.modifiedLine, 0, diff.modifiedLine, 0)
+    });
+    if (!preview) await this.waitForTabs(() => vscode.window.tabGroups.all.some(group =>
+      (viewColumn === vscode.ViewColumn.Beside || group.viewColumn === viewColumn)
+      && group.tabs.some(tab => this.isPreviewTab(tab, '', diff) && !tab.isPreview)), 'Could not confirm the opened diff tab.');
+  }
+
+  private async cleanup(keepId?: string, keepDiff?: DiffTarget): Promise<void> {
     const tabs = this.tabs().filter(tab => this.ownedTabs.has(tab) && !tab.isDirty
       && !(this.ownedTabs.get(tab) && !tab.isPreview)
-      && !(keepId && this.isTextTab(tab, keepId)));
+      && !(keepId && this.isTextTab(tab, keepId))
+      && !(keepDiff && this.isPreviewTab(tab, '', keepDiff)));
     if (tabs.length && !await vscode.window.tabGroups.close(tabs, true))
       throw new Error('Could not close temporary picker preview tabs.');
     if (tabs.length) await this.waitForTabs(() => !this.tabs().some(tab => tabs.includes(tab)),
@@ -185,12 +229,21 @@ export class EditorPreview {
 
   private async restoreBackgroundPreview(): Promise<boolean> {
     const uri = this.backgroundPreview;
-    if (!uri || !this.replacedBackgroundPreview || this.tabs().some(tab => this.isTextTab(tab, uri.toString()))) return false;
-    await vscode.window.showTextDocument(uri, { viewColumn: this.column, preserveFocus: true, preview: true });
-    await this.waitForTabs(() => this.tabs().some(tab => this.isTextTab(tab, uri.toString())),
-      'Could not restore the previous background preview tab.');
+    const diff = this.backgroundDiff;
+    if ((!uri && !diff) || !this.replacedBackgroundPreview || this.hasBackgroundPreview()) return false;
+    if (diff) await vscode.commands.executeCommand('vscode.diff', diff.original, diff.modified, diff.title,
+      { viewColumn: this.column, preserveFocus: true, preview: true });
+    else if (uri) await vscode.window.showTextDocument(uri, { viewColumn: this.column, preserveFocus: true, preview: true });
+    await this.waitForTabs(() => this.hasBackgroundPreview(), 'Could not restore the previous background preview tab.');
     this.replacedBackgroundPreview = false;
     return true;
+  }
+
+  private hasBackgroundPreview(): boolean {
+    return this.tabs().some(tab => this.backgroundPreview && this.isTextTab(tab, this.backgroundPreview.toString())
+      || this.backgroundDiff && tab.input instanceof vscode.TabInputTextDiff
+        && tab.input.original.toString() === this.backgroundDiff.original.toString()
+        && tab.input.modified.toString() === this.backgroundDiff.modified.toString());
   }
 
   private async waitForTabs(condition: () => boolean, message: string): Promise<void> {
@@ -211,18 +264,30 @@ export class EditorPreview {
   }
 
   private async restore(preserveFocus: boolean): Promise<void> {
+    if (this.originalDiff) {
+      await vscode.commands.executeCommand('vscode.diff', this.originalDiff.original, this.originalDiff.modified,
+        this.originalDiff.title, { viewColumn: this.column, preserveFocus, preview: this.originalWasPreview });
+      const editor = vscode.window.visibleTextEditors.find(editor =>
+        editor.viewColumn === this.column && editor.document.uri.toString() === this.original?.document.uri.toString());
+      if (editor) this.restoreSelections(editor);
+      return;
+    }
     if (this.original) {
       const document = this.original.document;
       const editor = await vscode.window.showTextDocument(document.uri, {
         viewColumn: this.column, preserveFocus, preview: this.originalWasPreview
       });
-      editor.selections = [...this.selections];
-      if (this.visibleRange) {
-        const center = Math.floor((this.visibleRange.start.line + this.visibleRange.end.line) / 2);
-        editor.revealRange(new vscode.Range(center, 0, center, 0), vscode.TextEditorRevealType.InCenter);
-      }
+      this.restoreSelections(editor);
     } else if (!preserveFocus) {
       await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
+    }
+  }
+
+  private restoreSelections(editor: vscode.TextEditor): void {
+    editor.selections = [...this.selections];
+    if (this.visibleRange) {
+      const center = Math.floor((this.visibleRange.start.line + this.visibleRange.end.line) / 2);
+      editor.revealRange(new vscode.Range(center, 0, center, 0), vscode.TextEditorRevealType.InCenter);
     }
   }
 }

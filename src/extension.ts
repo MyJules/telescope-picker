@@ -5,6 +5,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel('Telescope Picker');
   const controller = new PickerController(context, output);
   context.subscriptions.push(output, controller,
+    vscode.workspace.registerTextDocumentContentProvider('telescope-picker-empty', {
+      provideTextDocumentContent: () => ''
+    }),
     vscode.commands.registerCommand('telescopePicker.configureShortcuts', () =>
       vscode.commands.executeCommand('workbench.action.openGlobalKeybindings', '@ext:local.telescope-picker')),
     vscode.commands.registerCommand('telescopePicker.files', () => controller.show()),
@@ -15,6 +18,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('telescopePicker.searchCurrentFile', (query?: unknown) => {
       if (query !== undefined && typeof query !== 'string') throw new Error('Current-file query must be a string.');
       return controller.show(false, 'currentFile', query);
+    }),
+    vscode.commands.registerCommand('telescopePicker.searchGitDiffs', (query?: unknown) => {
+      if (query !== undefined && typeof query !== 'string') throw new Error('Git-diff query must be a string.');
+      return controller.show(false, 'gitDiffs', query);
     }),
     vscode.commands.registerCommand('telescopePicker.resume', () => controller.show(true)),
     vscode.commands.registerCommand('telescopePicker.openBeside', () => controller.openBeside()),

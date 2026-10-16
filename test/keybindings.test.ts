@@ -5,6 +5,7 @@ interface Manifest {
   contributes: {
     commands: { command: string; title: string }[];
     keybindings: { command: string; key: string; mac?: string; when?: string }[];
+    menus: { 'scm/title': { command: string; when: string; group: string }[] };
   };
 }
 
@@ -21,5 +22,11 @@ it('contributes separate overridable file and content shortcuts on Windows/Linux
   }
   expect(manifest.contributes.commands).toContainEqual({
     command: 'telescopePicker.configureShortcuts', title: 'Configure Keyboard Shortcuts', category: 'Telescope Picker'
+  });
+  expect(manifest.contributes.commands).toContainEqual({
+    command: 'telescopePicker.searchGitDiffs', title: 'Browse Git Changes', category: 'Telescope Picker', icon: '$(git-compare)'
+  });
+  expect(manifest.contributes.menus['scm/title']).toContainEqual({
+    command: 'telescopePicker.searchGitDiffs', when: 'scmProvider == git', group: 'navigation'
   });
 });

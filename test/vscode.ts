@@ -199,6 +199,7 @@ export class MockQuickPick {
 }
 export const window = {
   activeTextEditor: undefined as TextEditor | undefined,
+  get visibleTextEditors(): readonly TextEditor[] { return this.activeTextEditor ? [this.activeTextEditor] : []; },
   createWebviewPanel: vi.fn(),
   createQuickPick: vi.fn(() => new MockQuickPick()),
   createTextEditorDecorationType: vi.fn(() => ({ key: 'match', dispose: vi.fn() })),
@@ -227,7 +228,8 @@ export const window = {
       ? window.tabGroups.activeTabGroup.viewColumn + 1 : options.viewColumn ?? 1;
     let group = window.tabGroups.all.find(candidate => candidate.viewColumn === column);
     if (!group) { group = new MockGroup(column); window.tabGroups.all.push(group); }
-    let tab = group.tabs.find(candidate => candidate.input.uri.toString() === document.uri.toString());
+    let tab = group.tabs.find(candidate => candidate.input instanceof TabInputText
+      && candidate.input.uri.toString() === document.uri.toString());
     if (!tab) {
       if (options.preview && editorSettings.previewEnabled) group.tabs = group.tabs.filter(candidate => !candidate.isPreview || candidate.isDirty);
       tab = new MockTab(document, group, Boolean(options.preview && editorSettings.previewEnabled));
@@ -243,9 +245,39 @@ export const window = {
   }),
   showErrorMessage: vi.fn(async (_message: string) => undefined)
 };
-export const commands = { executeCommand: vi.fn(async (_command: string, ..._args: unknown[]) => undefined) };
+function isUri(value: unknown): value is VscodeUri { return value instanceof Uri; }
+export const commands = { executeCommand: vi.fn(async (command: string, ...args: unknown[]) => {
+  if (command !== 'vscode.diff') return undefined;
+  const [original, modified, title, options] = args;
+  if (!isUri(original) || !isUri(modified) || typeof title !== 'string' || typeof options !== 'object' || !options)
+    throw new Error('Invalid mock diff arguments');
+  const requested = 'viewColumn' in options && typeof options.viewColumn === 'number' ? options.viewColumn : ViewColumn.One;
+  const column = requested === ViewColumn.Beside ? window.tabGroups.activeTabGroup.viewColumn + 1 : requested;
+  let group = window.tabGroups.all.find(group => group.viewColumn === column);
+  if (!group) { group = new MockGroup(column); window.tabGroups.all.push(group); }
+  const preview = 'preview' in options && options.preview === true && editorSettings.previewEnabled;
+  let tab = group.tabs.find(tab => tab.input instanceof TabInputTextDiff
+    && tab.input.original.toString() === original.toString() && tab.input.modified.toString() === modified.toString());
+  const document = workspace.textDocuments.find(document => document.uri.toString() === modified.toString())
+    ?? createDocument(modified, false, '');
+  if (!tab) {
+    if (preview) group.tabs = group.tabs.filter(tab => !tab.isPreview || tab.isDirty);
+    tab = new MockTab(document, group, preview, new TabInputTextDiff(original, modified), title);
+    group.tabs.push(tab);
+  } else if (!preview) tab.isPreview = false;
+  group.activeTab = tab;
+  const editor = createEditor(document, column);
+  if ('selection' in options && options.selection instanceof Range) editor.selection = new Selection(
+    options.selection.start.line, options.selection.start.character, options.selection.end.line, options.selection.end.character);
+  window.activeTextEditor = editor;
+  return undefined;
+}) };
 
 export class TabInputText { constructor(readonly uri: VscodeUri) {} }
+export class TabInputTextDiff {
+  constructor(readonly original: VscodeUri, readonly modified: VscodeUri) {}
+  get uri(): VscodeUri { return this.modified; }
+}
 export class MockGroup implements TabGroup {
   isActive = true;
   activeTab: MockTab | undefined;
@@ -253,14 +285,15 @@ export class MockGroup implements TabGroup {
   constructor(readonly viewColumn: VscodeColumn) {}
 }
 export class MockTab implements Tab {
-  readonly input: TabInputText;
+  readonly input: TabInputText | TabInputTextDiff;
   readonly label: string;
   isActive = true;
   isPinned = false;
   get isDirty(): boolean { return this.document.isDirty; }
-  constructor(readonly document: TextDocument, readonly group: MockGroup, public isPreview: boolean) {
-    this.input = new TabInputText(document.uri);
-    this.label = document.uri.path;
+  constructor(readonly document: TextDocument, readonly group: MockGroup, public isPreview: boolean,
+    input?: TabInputTextDiff, title?: string) {
+    this.input = input ?? new TabInputText(document.uri);
+    this.label = title ?? document.uri.path;
   }
 }
 export const editorSettings = { previewEnabled: true };

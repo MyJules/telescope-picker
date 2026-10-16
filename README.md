@@ -9,7 +9,7 @@ the original editor group. There is no bottom preview panel or picker webview.
 
 Requires desktop VS Code 1.108 or newer for native file-icon theme support.
 
-1. Install the platform-matching VSIX (for example `telescope-picker-win32-x64-0.10.2.vsix`)
+1. Install the platform-matching VSIX (for example `telescope-picker-win32-x64-0.11.1.vsix`)
    using **Extensions: Install from VSIX**.
 2. Run **Developer: Reload Window** when updating an already-running version.
 3. Open a folder or multi-root workspace.
@@ -31,6 +31,62 @@ Resume Picker restores the target URI, query and selection (unsaved contents
 must still exist in the editor). Workspace include/exclude/ignore settings do
 not restrict this explicitly chosen file. Editing the target refreshes results;
 chat and other documents do not. An open text editor is required.
+
+## Browse Git changes
+
+Run **Telescope Picker: Browse Git Changes**, use its Git compare button in the
+picker, or click the Git changes icon in Git's Source Control title bar.
+Assign your preferred shortcut through **Telescope Picker: Configure Keyboard
+Shortcuts**; this command does not claim another default key combination.
+The command ID remains `telescopePicker.searchGitDiffs` for existing keybindings.
+
+**All diff hunks appear immediately; no query is required.** Use Up/Down to
+navigate changed sections, grouped by repository, change type, and file.
+Each row shows the Git hunk range, added/removed line counts, and a short code
+excerpt. Nearby edits share a hunk using Git's normal three context lines.
+Untracked text files appear as one whole-file addition. Pure renames, binary
+changes, empty files, and other metadata-only changes still have a navigation
+row even without text hunks. There is no 200-hunk limit.
+
+Optionally type to filter by filename/path or literal, case-insensitive text in
+changed lines. Clearing the input restores the full list. Invoking Browse Git
+Changes afresh clears a prior filter; Resume Picker retains it and the selected
+hunk.
+
+- **Staged:** compares HEAD to the index, including new repositories without HEAD.
+- **Unstaged:** compares the index to the saved working-tree file.
+- **Untracked:** treats the file's live text as added lines.
+- **Conflicts:** compares the merge-base index stage (`:1`) to the saved working
+  file, including conflict markers. Add/add conflicts without a base treat the
+  working file as added text. The extension does not resolve conflicts.
+
+Selection immediately previews **VS Code's native diff editor** at the changed
+section while keyboard focus stays in the picker. Moving between hunks in one
+file reuses its diff tab. **Enter** keeps the diff open as a normal pinned tab;
+**Ctrl/Cmd+Enter** opens it beside.
+Staged diffs show HEAD versus index, never the unstaged working tree. Additions
+and deletions use an empty side where needed. A deletion opens near its hunk on
+the modified side. Escape restores the previous editor, including an existing
+native diff tab. VS Code's existing Git and merge tools handle staging,
+discarding, and conflict resolution; the picker never changes Git state.
+
+This uses the built-in **vscode.git API v1** for repositories, status updates,
+Git executable location, and historical document URIs. Git must be installed and
+the built-in extension enabled. Every repository registered with Source Control
+is listed, including multiple roots; repository/status changes refresh the
+active list. Folder filters for filename/workspace-content search do not
+filter Git results. Git's tracked/untracked status determines eligibility.
+
+Tracked-file patches use **saved Git changes**. Save edits first to include
+them; a dirty editor that no longer matches a result is explicitly rejected
+rather than opening a wrong line. Untracked live documents include unsaved edits.
+Binary changes are listed without text hunks and left to VS Code's native viewer.
+Git textconv and external diff
+programs are disabled. Git output and newly loaded untracked file text are bounded
+to 64 MiB per file; exceeding this is an explicit error, not silent truncation.
+Obsolete requests stop their child Git process and cannot publish stale results.
+Read/Git failures appear in the popup and Output; no-repository and clean-tree
+states are explicit.
 
 The native popup keeps input focus while the selected file appears in the
 current code editor behind it. Native VS Code syntax highlighting, language
