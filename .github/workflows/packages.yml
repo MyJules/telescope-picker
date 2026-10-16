@@ -52,5 +52,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: telescope-picker-${{ matrix.target }}
-          path: telescope-picker-${{ matrix.target }}-*.vsix
+          path: releases/*/jules-telescope-picker-${{ matrix.target }}-*.vsix
           if-no-files-found: error

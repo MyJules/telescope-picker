@@ -149,7 +149,7 @@ it('searches only the original current document including unsaved text without a
   picker.value = 'UNSAVED';
   await vi.waitFor(() => expect(contentItems()).toHaveLength(1));
   expect(contentItems()[0]?.resourceUri?.toString()).toBe('file:///workspace/original.ts');
-  expect(contentItems()[0]?.label).toBe('const unsaved = 1;');
+  expect(contentItems()[0]?.description).toBe('1: const unsaved = 1;');
   expect(picker.title).toContain('Current File · 1 matching lines');
   expect(ContentProvider.prototype.search).toHaveBeenCalledTimes(scans);
   picker.hide();
@@ -158,6 +158,28 @@ it('searches only the original current document including unsaved text without a
   await vi.waitFor(() => expect(contentItems()).toHaveLength(1));
   expect(contentItems()[0]?.resourceUri?.toString()).toBe('file:///workspace/original.ts');
   expect(picker.value).toBe('UNSAVED');
+});
+
+it('keeps current-file matches in ascending line order instead of ranking code labels', async () => {
+  const document = createDocument(vscode.Uri.parse('file:///workspace/order.ts'), true,
+    'export function needle() {}\n// unrelated\nneedle\nconst needle = 1;');
+  workspace.textDocuments.push(document);
+  picker.hide();
+  await controller.show();
+  picker = window.createQuickPick.mock.results.at(-1)?.value ?? new MockQuickPick();
+  picker.hide();
+  await new Promise(resolve => setTimeout(resolve, 50));
+  await window.showTextDocument(document, { viewColumn: 1, preview: false });
+  await controller.show(false, 'currentFile', 'needle');
+  picker = window.createQuickPick.mock.results.at(-1)?.value ?? new MockQuickPick();
+  expect(contentItems().map(item => item.description)).toEqual([
+    '1: export function needle() {}', '3: needle', '4: const needle = 1;'
+  ]);
+  expect(new Set(contentItems().map(item => item.label)).size).toBe(1);
+  expect(picker.matchOnDescription).toBe(false);
+  expect(picker.activeItems[0]?.id).toBe(contentItems()[0]?.id);
+  expect(controller.navigate(1)).toBe(true);
+  expect(picker.activeItems[0]?.id).toBe(contentItems()[1]?.id);
 });
 
 it('shows explicit current-file errors, empty and no-match states', async () => {
@@ -214,7 +236,7 @@ it('refreshes current-file text changes only and rejects obsolete local query wo
   await vi.waitFor(() => expect(picker.items[0]?.label).toBe('No matching text.'));
   picker.value = 'changedNeedle';
   await vi.waitFor(() => expect(contentItems()).toHaveLength(1));
-  expect(contentItems()[0]?.label).toBe('const changedNeedle = 2;');
+  expect(contentItems()[0]?.description).toBe('1: const changedNeedle = 2;');
 });
 
 it('shows an existing popup before waiting for a mode search to complete', async () => {

@@ -202,9 +202,11 @@ export class PickerController implements vscode.Disposable {
           items.push({
             id: match.id, uri: match.uri, path: match.path, location: match.location, diff: match.diff,
             resourceUri: vscode.Uri.parse(match.uri), iconPath: vscode.ThemeIcon.File,
-            label: literalLabel(match.diff?.hunk
+            label: state.mode === 'currentFile' ? literalLabel(first.path) : literalLabel(match.diff?.hunk
               ?? `${match.diff ? match.diff.side === 'added' ? '+ ' : '- ' : ''}${start ? '...' : ''}${excerpt || '(whitespace)'}${start + 400 < text.length ? '...' : ''}`),
-            description: `${literalLabel(match.path)}${match.diff?.metadataOnly ? '' : `:${match.location.line + 1}`} · ${literalLabel(match.root)}`,
+            description: state.mode === 'currentFile'
+              ? `${match.location.line + 1}: ${literalLabel(`${start ? '...' : ''}${excerpt || '(whitespace)'}${start + 400 < text.length ? '...' : ''}`)}`
+              : `${literalLabel(match.path)}${match.diff?.metadataOnly ? '' : `:${match.location.line + 1}`} · ${literalLabel(match.root)}`,
             alwaysShow: true, buttons: [splitButton]
           });
         }

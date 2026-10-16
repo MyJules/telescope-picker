@@ -1,4 +1,4 @@
-# Telescope Picker
+# Telescope Pick
 
 A standalone desktop VS Code extension with a **native popup for fuzzy filenames
 and fast text search**.
@@ -9,7 +9,7 @@ the original editor group. There is no bottom preview panel or picker webview.
 
 Requires desktop VS Code 1.108 or newer for native file-icon theme support.
 
-1. Install the platform-matching VSIX (for example `telescope-picker-win32-x64-0.11.2.vsix`)
+1. Install the platform-matching VSIX (for example `jules-telescope-picker-win32-x64-0.11.5.vsix`)
    using **Extensions: Install from VSIX**.
 2. Run **Developer: Reload Window** when updating an already-running version.
 3. Open a folder or multi-root workspace.
@@ -31,6 +31,9 @@ Resume Picker restores the target URI, query and selection (unsaved contents
 must still exist in the editor). Workspace include/exclude/ignore settings do
 not restrict this explicitly chosen file. Editing the target refreshes results;
 chat and other documents do not. An open text editor is required.
+Current-file matches follow ascending source line order, not relevance ranking.
+Each row uses the same file label with its line number and code excerpt alongside
+it, preventing native Quick Pick label ranking from reordering the matches.
 
 ## Browse Git changes
 
@@ -339,7 +342,7 @@ npm run package
 
 Press F5 for an Extension Development Host. `npm run watch` rebuilds while
 developing. The publisher is `jules`, so the extension ID is
-`jules.telescope-picker`. Publishing requires access to that Marketplace publisher.
+`jules.jules-telescope-picker`. Publishing requires access to that Marketplace publisher.
 When switching from earlier `local.telescope-picker` builds, uninstall the local
 extension before installing this one to avoid duplicate command registrations.
 
@@ -357,11 +360,17 @@ Linux extension-host tests use Xvfb. Download the separate VSIX artifacts from a
 successful workflow run; no Marketplace publication or GitHub release is automatic.
 Hosted ARM runners require a repository/account eligible for those GitHub runners.
 
-Locally, `npm ci` and `npm run package` build only the current host's target.
-Packaging checks that the bundled ripgrep executable actually runs before
-creating the VSIX, and rejects unsupported hosts and cross-target arguments.
-Do not rename a Windows VSIX to a Linux/macOS target or copy its `node_modules`;
-install dependencies and build natively on each target instead.
+Locally, `npm ci` and `npm run package` build the current host's target and
+check that its bundled ripgrep executable runs. Packages are saved under
+`releases/<version>/`.
+
+Run `npm run package:all` to cross-package all six targets into that same version
+folder, along with `SHA256SUMS.txt`. This requires npm, Node, and `tar` on PATH.
+The script builds the portable JavaScript once, downloads each official ripgrep
+binary at the installed loader's exact version, and packages an isolated runtime
+with only that target's binary. It checks executable formats, but cannot run
+foreign binaries: cross-packaging is not a substitute for native CI tests.
+No publishing, commits, or GitHub uploads happen automatically.
 
 Unit tests cover relevance, discovery/cache, request generations, the native
 popup, editor-preview cancellation/races, dirty documents, pinned/existing tabs,

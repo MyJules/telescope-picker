@@ -33,6 +33,27 @@ export async function run(): Promise<void> {
   const previous = configuration.get<string | null>('iconTheme');
   try {
     await configuration.update('iconTheme', process.env.TELESCOPE_TEST_ICON_THEME ?? 'picker-test-icons', vscode.ConfigurationTarget.Global);
+    const extension = vscode.extensions.getExtension('jules.jules-telescope-picker');
+    assert.ok(extension);
+    await extension.activate();
+    const ordered = await vscode.workspace.openTextDocument({
+      content: 'export function lineOrderNeedle() {}\n// gap\nlineOrderNeedle\nconst lineOrderNeedle = 1;',
+      language: 'typescript'
+    });
+    await vscode.window.showTextDocument(ordered, { preview: false });
+    await vscode.commands.executeCommand('telescopePicker.searchCurrentFile', 'lineOrderNeedle');
+    await until(() => vscode.window.activeTextEditor?.document === ordered
+      && vscode.window.activeTextEditor.selection.start.line === 0, 'Current-file earliest line is selected first');
+    await vscode.commands.executeCommand('workbench.action.quickOpenSelectNext');
+    await until(() => vscode.window.activeTextEditor?.document === ordered
+      && vscode.window.activeTextEditor.selection.start.line === 2, 'Native Down follows source order instead of exact-label ranking');
+    await vscode.commands.executeCommand('workbench.action.quickOpenSelectNext');
+    await until(() => vscode.window.activeTextEditor?.document === ordered
+      && vscode.window.activeTextEditor.selection.start.line === 3, 'Native Down reaches the next source line');
+    await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+    await until(() => vscode.window.activeTextEditor?.document === ordered
+      && vscode.window.activeTextEditor.selection.start.line === 0, 'Current-file cancellation restores initial selection');
+    await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
     await checkPicker();
     await checkGitDiffs();
     const commands = await vscode.commands.getCommands(true);
@@ -157,7 +178,7 @@ async function checkGitDiffs(): Promise<void> {
 }
 
 async function checkPicker(): Promise<void> {
-  const extension = vscode.extensions.getExtension('jules.telescope-picker');
+  const extension = vscode.extensions.getExtension('jules.jules-telescope-picker');
   assert.ok(extension, 'Development extension is registered');
   await extension.activate();
   const provider = new FileProvider();
@@ -261,6 +282,9 @@ async function checkPicker(): Promise<void> {
       assertNoPickerTabs();
 
       await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false });
+      await until(() => vscode.window.activeTextEditor?.document === document
+        && vscode.window.activeTextEditor.viewColumn === vscode.ViewColumn.One,
+      'Original editor is active before current-file search captures its target');
       await vscode.commands.executeCommand('telescopePicker.searchCurrentFile', 'UNSAVED preview fixture 137');
       await until(() => editorAt(vscode.ViewColumn.One)?.document === document
         && editorAt(vscode.ViewColumn.One)?.selection.start.line === 137,
