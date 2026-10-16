@@ -1,0 +1,7 @@
+{
+  "folders": [
+    { "path": "first", "name": "First" },
+    { "path": "second", "name": "Second" }
+  ],
+  "settings": { "files.exclude": { "**/*.ignored": true }, "security.workspace.trust.enabled": false }
+}

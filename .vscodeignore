@@ -1,0 +1,15 @@
+src/**
+test/**
+scripts/**
+.vscode/**
+.vscode-test/**
+node_modules/**
+tsconfig.json
+esbuild.mjs
+vitest.config.mts
+package-lock.json
+dist/**/*.map
+dist/browser-host.js
+dist/test/**
+.gitignore
+*.vsix

@@ -1,0 +1,58 @@
+{
+  "name": "telescope-picker",
+  "displayName": "Telescope Picker",
+  "description": "A keyboard-first workspace file picker with a native-themed results and preview webview.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": { "vscode": "^1.95.0" },
+  "categories": ["Other"],
+  "extensionKind": ["workspace"],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "capabilities": { "untrustedWorkspaces": { "supported": true }, "virtualWorkspaces": { "supported": true } },
+  "contributes": {
+    "commands": [
+      { "command": "telescopePicker.files", "title": "Find Files", "category": "Telescope Picker" },
+      { "command": "telescopePicker.resume", "title": "Resume Picker", "category": "Telescope Picker" }
+    ],
+    "keybindings": [
+      { "command": "telescopePicker.files", "key": "ctrl+alt+p", "mac": "cmd+alt+p", "when": "!terminalFocus" }
+    ],
+    "configuration": {
+      "title": "Telescope Picker",
+      "properties": {
+        "telescopePicker.vimNavigation": {
+          "type": "boolean", "default": false,
+          "description": "Use Ctrl+J / Ctrl+K to navigate results while the search input stays focused."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:host": "npm run build && node scripts/test-host.mjs",
+    "benchmark": "tsx scripts/benchmark.ts",
+    "preview": "tsx scripts/preview.mts",
+    "vscode:prepublish": "npm run typecheck && npm run build",
+    "package": "vsce package --allow-missing-repository --out telescope-picker-0.1.0.vsix"
+  },
+  "dependencies": {
+    "fuzzysort": "^4.0.2",
+    "highlight.js": "^11.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "1.95.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.25.0",
+    "jsdom": "^26.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}

@@ -1,0 +1,30 @@
+:root {
+  color-scheme: dark;
+  --vscode-editor-background: #1f1f1f;
+  --vscode-editor-foreground: #cccccc;
+  --vscode-editorWidget-background: #252526;
+  --vscode-panel-border: #454545;
+  --vscode-font-family: "Segoe UI", sans-serif;
+  --vscode-font-size: 13px;
+  --vscode-editor-font-family: Consolas, monospace;
+  --vscode-editor-font-size: 14px;
+  --vscode-editor-font-weight: 400;
+  --vscode-descriptionForeground: #a0a0a0;
+  --vscode-input-background: #313131;
+  --vscode-input-foreground: #cccccc;
+  --vscode-input-placeholderForeground: #999999;
+  --vscode-focusBorder: #007fd4;
+  --vscode-button-secondaryBackground: #313131;
+  --vscode-button-secondaryForeground: #cccccc;
+  --vscode-button-secondaryHoverBackground: #454545;
+  --vscode-list-hoverBackground: #2a2d2e;
+  --vscode-list-activeSelectionBackground: #04395e;
+  --vscode-list-activeSelectionForeground: #ffffff;
+  --vscode-list-highlightForeground: #2aaaff;
+  --vscode-textLink-foreground: #4daafc;
+  --vscode-editorLineNumber-foreground: #858585;
+  --vscode-symbolIcon-keywordForeground: #c586c0;
+  --vscode-symbolIcon-numberForeground: #b5cea8;
+  --vscode-symbolIcon-functionForeground: #dcdcaa;
+  --vscode-errorForeground: #f48771;
+}
