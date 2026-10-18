@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { EditorPreview } from '../src/editorPreview';
-import { commands, createDocument, editorSettings, resetEditors, window, workspace } from './vscode';
+import { commands, createDocument, editorSettings, resetEditors, settings, window, workspace } from './vscode';
 
 let preview: EditorPreview;
 let original: vscode.TextEditor;
@@ -11,6 +11,7 @@ const target = 'file:///workspace/target.ts';
 beforeEach(async () => {
   vi.useFakeTimers();
   resetEditors();
+  settings.set('telescopePicker.previewDelay', 35);
   workspace.fs.stat.mockResolvedValue({ size: 20 });
   original = await window.showTextDocument(createDocument(vscode.Uri.parse('file:///workspace/original.ts'), true), {
     viewColumn: 1, preview: false
@@ -21,6 +22,27 @@ beforeEach(async () => {
   preview = new EditorPreview(original, vscode.ViewColumn.One, errors);
 });
 afterEach(async () => { await preview.finish(false); vi.useRealTimers(); });
+
+it('waits for the default 120 ms settling interval and resets it on navigation', async () => {
+  settings.delete('telescopePicker.previewDelay');
+  preview.select('file:///workspace/old.ts');
+  await vi.advanceTimersByTimeAsync(100);
+  expect(window.showTextDocument).not.toHaveBeenCalled();
+  preview.select(target);
+  await vi.advanceTimersByTimeAsync(119);
+  expect(window.showTextDocument).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(window.showTextDocument).toHaveBeenCalledTimes(1);
+  expect(window.activeTextEditor?.document.uri.toString()).toBe(target);
+});
+it('disables automatic previews without disabling explicit acceptance', async () => {
+  settings.set('telescopePicker.automaticPreview', false);
+  preview.select(target);
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(window.showTextDocument).not.toHaveBeenCalled();
+  await preview.accept(vscode.Uri.parse(target), false);
+  expect(window.activeTextEditor?.document.uri.toString()).toBe(target);
+});
 
 it('debounces navigation and previews only the latest selection with focus preserved', async () => {
   preview.select('file:///workspace/old.ts');

@@ -9,7 +9,7 @@ the original editor group. There is no bottom preview panel or picker webview.
 
 Requires desktop VS Code 1.108 or newer for native file-icon theme support.
 
-1. Install the platform-matching VSIX (for example `jules-telescope-picker-win32-x64-0.11.6.vsix`)
+1. Install the platform-matching VSIX (for example `jules-telescope-picker-win32-x64-0.11.7.vsix`)
    using **Extensions: Install from VSIX**.
 2. Run **Developer: Reload Window** when updating an already-running version.
 3. Open a folder or multi-root workspace.
@@ -34,8 +34,37 @@ chat and other documents do not. An open text editor is required.
 Current-file matches follow ascending source line order, not relevance ranking.
 Each row uses the same file label with its line number and code excerpt alongside
 it, preventing native Quick Pick label ranking from reordering the matches.
-Search File Contents uses the same ascending line order when all results belong
-to a single file. Multi-file searches retain their existing native ranking.
+Search File Contents uses file-path labels with line numbers and code alongside
+them for both single- and multi-file results. Matches within each file follow
+line order, and streamed results never switch between different row layouts.
+
+### Large-workspace responsiveness
+
+While a replacement search loads, previous results remain visible with the busy
+indicator, but cannot be opened or previewed until replaced by current results.
+Empty intermediate batches do not clear the list. Completed empty searches and
+errors still replace it with an explicit status.
+
+Content searches publish their first available batch immediately, then batch
+growing results at 100 ms intervals (250 ms above 5,000 matches), with final
+results always delivered. Unchanged content rows are reused. All matches remain
+available; no result cap or paging is introduced.
+
+Automatic previews wait for selection to settle for 120 ms by default. For
+large workspaces or expensive language servers, configure:
+
+```jsonc
+{
+  "telescopePicker.previewDelay": 200,
+  "telescopePicker.automaticPreview": false,
+  "telescopePicker.performanceDiagnostics": true
+}
+```
+
+With automatic previews disabled, Enter and open-beside still work. Preview
+delay accepts 0-2000 ms. Diagnostic summaries in **Output: Telescope Picker**
+report search/update and content-row preparation/dispatch durations without
+query text. They do not measure native rendering or language-server work.
 
 ## Browse Git changes
 
@@ -292,7 +321,7 @@ removed when changing selection/query or closing/accepting the picker.
 - Loading, no matches, discovery errors, preview errors, and opening failures are
   explicit. Details are logged in **Output: Telescope Picker**. Status rows do
   not open files.
-- Automatic preview waits 35 ms to coalesce rapid navigation. Files already
+- Automatic preview waits 120 ms by default to coalesce rapid navigation. Files already
   loaded by VS Code use their live contents. Other resources are checked with
   `workspace.fs.stat`; files over **1 MiB** are not automatically loaded.
   Press Enter to explicitly open an oversized file.

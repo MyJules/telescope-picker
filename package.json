@@ -2,7 +2,7 @@
   "name": "jules-telescope-picker",
   "displayName": "Telescope Pick",
   "description": "Fuzzy file picking and fast text search with live previews in the current code editor.",
-  "version": "0.11.6",
+  "version": "0.11.7",
   "publisher": "jules",
   "repository": {
     "type": "git",
@@ -144,6 +144,23 @@
     "configuration": {
       "title": "Telescope Picker",
       "properties": {
+        "telescopePicker.performanceDiagnostics": {
+          "type": "boolean",
+          "default": false,
+          "description": "Log search/update and content-row preparation timings to Telescope Picker Output. Does not log query text or measure native rendering or language-server work."
+        },
+        "telescopePicker.automaticPreview": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically preview the selected result. Disable to reduce editor and language-server work; Enter still opens the selection."
+        },
+        "telescopePicker.previewDelay": {
+          "type": "number",
+          "default": 120,
+          "minimum": 0,
+          "maximum": 2000,
+          "description": "Wait this many milliseconds after selection settles before automatically previewing a result."
+        },
         "telescopePicker.include": {
           "type": "array",
           "items": {

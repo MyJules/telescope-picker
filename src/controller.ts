@@ -74,6 +74,7 @@ export class PickerController implements vscode.Disposable {
     let accepted = false;
     let opening = false;
     let visible = new Map<string, FileItem>();
+    let contentRows = new WeakMap<ContentMatch, FileItem>();
     let debounce: ReturnType<typeof setTimeout> | undefined;
     let previewedId: string | undefined;
     let pendingSelection: string | undefined;
@@ -83,6 +84,7 @@ export class PickerController implements vscode.Disposable {
     let awaitingNativeSelection = false;
     let resultTitle = 'Telescope Picker';
     let previewError: string | undefined;
+    let renderMilliseconds = 0;
     const title = (value: string): void => {
       resultTitle = value;
       const next = previewError ?? value;
@@ -130,6 +132,10 @@ export class PickerController implements vscode.Disposable {
       visible.clear();
       picker.items = [{ label: message, alwaysShow: true }];
       picker.activeItems = [];
+    };
+    const loading = (message: string): void => {
+      visible.clear();
+      if (!picker.items.some(item => item.id)) status(message);
     };
     const select = (item: FileItem | undefined): void => {
       if (closed || opening || !item?.id || visible.get(item.id) !== item) return;
@@ -179,6 +185,7 @@ export class PickerController implements vscode.Disposable {
       }
     };
     const contentResults = (result: ContentUpdate): void => {
+      const renderStarted = performance.now();
       const groups = new Map<string, ContentMatch[]>();
       for (const match of result.items) {
         const key = JSON.stringify([match.diff ? match.path : match.uri, match.root]);
@@ -186,7 +193,7 @@ export class PickerController implements vscode.Disposable {
         if (group) group.push(match);
         else groups.set(key, [match]);
       }
-      const lineOrdered = state.mode === 'currentFile' || state.mode === 'contents' && groups.size === 1;
+      const lineOrdered = state.mode === 'currentFile' || state.mode === 'contents';
       const items: FileItem[] = [];
       for (const matches of groups.values()) {
         const first = matches[0];
@@ -197,10 +204,12 @@ export class PickerController implements vscode.Disposable {
         });
         for (const match of matches.sort((a, b) =>
           (a.diff?.modifiedLine ?? a.location.line) - (b.diff?.modifiedLine ?? b.location.line))) {
+          const cached = contentRows.get(match);
+          if (cached) { items.push(cached); continue; }
           const text = match.location.text;
           const start = Math.max(0, (match.location.matches[0] ?? 0) - 40);
           const excerpt = text.slice(start, start + 400).trim();
-          items.push({
+          const item: FileItem = {
             id: match.id, uri: match.uri, path: match.path, location: match.location, diff: match.diff,
             resourceUri: vscode.Uri.parse(match.uri), iconPath: vscode.ThemeIcon.File,
             label: lineOrdered ? literalLabel(first.path) : literalLabel(match.diff?.hunk
@@ -209,7 +218,9 @@ export class PickerController implements vscode.Disposable {
               ? `${match.location.line + 1}: ${literalLabel(`${start ? '...' : ''}${excerpt || '(whitespace)'}${start + 400 < text.length ? '...' : ''}`)}${state.mode === 'contents' ? ` · ${literalLabel(match.root)}` : ''}`
               : `${literalLabel(match.path)}${match.diff?.metadataOnly ? '' : `:${match.location.line + 1}`} · ${literalLabel(match.root)}`,
             alwaysShow: true, buttons: [splitButton]
-          });
+          };
+          contentRows.set(match, item);
+          items.push(item);
         }
       }
       title(`Telescope Picker · ${modeLabel()} · ${result.total} ${state.mode === 'gitDiffs' ? 'hunks / changes' : 'matching lines'}`
@@ -217,11 +228,14 @@ export class PickerController implements vscode.Disposable {
         + (result.complete ? ' · Search complete' : ` · Searching roots ${result.searchedRoots}/${result.roots}`)
         + (result.binary ? ` · ${result.binary} binary files${state.mode === 'gitDiffs' ? '' : ' skipped'}` : '')
         + (result.unsupported ? ` · ${result.unsupported} unsupported resources skipped (see Output)` : ''));
-      display(items, result.complete ? state.mode === 'gitDiffs'
-        ? state.query ? 'No Git changes match this filter.' : 'No Git changes.' : 'No matching text.'
-        : state.mode === 'gitDiffs' ? 'Loading Git changes...' : 'Scanning workspace file contents...');
+      if (items.length || result.complete)
+        display(items, state.mode === 'gitDiffs'
+          ? state.query ? 'No Git changes match this filter.' : 'No Git changes.' : 'No matching text.');
+      renderMilliseconds += performance.now() - renderStarted;
     };
     const search = async (query: string): Promise<void> => {
+      const started = performance.now();
+      renderMilliseconds = 0;
       clearTimeout(debounce);
       this.contents.cancel();
       this.gitChanges.cancel();
@@ -233,7 +247,7 @@ export class PickerController implements vscode.Disposable {
       previewError = undefined;
       picker.busy = true;
       title(`Telescope Picker · ${modeLabel()}`);
-      status('Loading workspace files...');
+      loading('Loading workspace files...');
       try {
         if (query.length > 1024) throw new Error('Queries are limited to 1,024 characters.');
         if (state.mode === 'gitDiffs') {
@@ -302,7 +316,13 @@ export class PickerController implements vscode.Disposable {
           status(`Error: ${report(reason)}`);
         }
       } finally {
-        if (!closed && requests.isCurrent(generation)) picker.busy = false;
+        if (!closed && requests.isCurrent(generation)) {
+          picker.busy = false;
+          if (vscode.workspace.getConfiguration('telescopePicker').get<boolean>('performanceDiagnostics', false))
+            this.output.appendLine(`Performance: ${state.mode}, ${(performance.now() - started).toFixed(1)} ms search/update, `
+              + `${renderMilliseconds.toFixed(1)} ms content row preparation/dispatch, ${visible.size} results. `
+              + 'Excludes native rendering and editor/language-server work.');
+        }
       }
     };
     const schedule = (query: string): void => {
@@ -322,7 +342,7 @@ export class PickerController implements vscode.Disposable {
       previewedId = undefined;
       if (state.mode === 'files') { void search(query); return; }
       state.query = query;
-      status(state.mode === 'gitDiffs' ? 'Loading Git changes...' : query.length ? 'Searching file contents...' : state.mode === 'currentFile'
+      loading(state.mode === 'gitDiffs' ? 'Loading Git changes...' : query.length ? 'Searching file contents...' : state.mode === 'currentFile'
           ? 'Type text to search in the current file.' : 'Type text to search inside workspace files.');
       picker.busy = state.mode === 'gitDiffs' || Boolean(query.length);
       debounce = setTimeout(() => { void search(query); }, 80);
@@ -337,6 +357,7 @@ export class PickerController implements vscode.Disposable {
         picker.value = query;
       }
       state.selectedId = undefined;
+      contentRows = new WeakMap<ContentMatch, FileItem>();
       selectionTouched = false;
       pendingSelection = undefined;
       resetScroll = true;

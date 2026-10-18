@@ -1,6 +1,7 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import { FileProvider } from '../../src/files';
+import { EditorPreview } from '../../src/editorPreview';
 import { GitChangesProvider, type GitAPI } from '../../src/gitChanges';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -379,10 +380,10 @@ async function checkPicker(): Promise<void> {
 
       await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false });
       await vscode.commands.executeCommand('telescopePicker.searchContents', 'nativeOrderNeedle');
-      const nativeFirst = indexed.files.find(file => file.path === 'zz-native-z.ts');
+      const nativeFirst = indexed.files.find(file => file.path === 'zz-native-a.ts');
       assert.ok(nativeFirst);
       await until(() => editorAt(vscode.ViewColumn.One)?.document.uri.toString() === nativeFirst.id,
-        'Initial preview follows the native first visible match, not the first path-sorted file');
+        'Content preview follows stable file labels rather than ranking changing code excerpts');
       await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
       await until(() => vscode.window.activeTextEditor?.document.uri.toString() === nativeFirst.id
         && activeTab(vscode.ViewColumn.One)?.isPreview === false,
@@ -412,19 +413,27 @@ async function checkPicker(): Promise<void> {
         'Resume restores a matching line in a later file group');
       await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
       await until(() => vscode.window.activeTextEditor?.document === document
-        && vscode.window.activeTextEditor.selections.length === selections.length,
+        && vscode.window.activeTextEditor.selections.length === selections.length
+        && vscode.window.activeTextEditor.selections.every((selection, i) => selection.isEqual(selections[i]!)),
       'Cancel after grouped resume restores the original editor');
 
       const cleanOriginal = await vscode.window.showTextDocument(vscode.Uri.joinPath(firstRoot.uri, 'hidden.ignored'), {
         viewColumn: vscode.ViewColumn.One, preview: true
       });
       const cleanOriginalUri = cleanOriginal.document.uri.toString();
-      await vscode.commands.executeCommand('telescopePicker.files');
-      await until(() => editorAt(vscode.ViewColumn.One)?.document.uri.toString() === first.id,
-        'Clean original preview is replaced during navigation');
-      await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
       await until(() => vscode.window.activeTextEditor?.document.uri.toString() === cleanOriginalUri
-        && activeTab(vscode.ViewColumn.One)?.isPreview === true, 'Cancel restores an original unpinned preview');
+        && activeTab(vscode.ViewColumn.One)?.isPreview === true, 'Original unpinned preview is active before opening picker');
+      const previewErrors: unknown[] = [];
+      const cleanPreview = new EditorPreview(cleanOriginal, vscode.ViewColumn.One, reason => previewErrors.push(reason));
+      try {
+        cleanPreview.select(first.id);
+        await until(() => editorAt(vscode.ViewColumn.One)?.document.uri.toString() === first.id,
+          'Clean original preview is replaced during navigation');
+        await cleanPreview.finish(true);
+        await until(() => vscode.window.activeTextEditor?.document.uri.toString() === cleanOriginalUri
+          && activeTab(vscode.ViewColumn.One)?.isPreview === true, 'Cancel restores an original unpinned preview');
+        assert.deepEqual(previewErrors, []);
+      } finally { await cleanPreview.finish(true); }
     } finally {
       await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
       await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One });

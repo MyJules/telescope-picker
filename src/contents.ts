@@ -87,7 +87,7 @@ export class ContentProvider implements vscode.Disposable {
       let lastUpdate = 0;
       const publish = (force = false): void => {
         check();
-        if (force || Date.now() - lastUpdate >= 50) {
+        if (force || unsorted && (lastUpdate === 0 || Date.now() - lastUpdate >= (found.length > 5000 ? 250 : 100))) {
           lastUpdate = Date.now();
           if (unsorted) { found.sort(compareContentMatches); unsorted = false; }
           update({ ...state, items: [...found] });

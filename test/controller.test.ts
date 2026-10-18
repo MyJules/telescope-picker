@@ -67,7 +67,7 @@ it('lists Git hunks without a query, opens the native diff and resumes', async (
   expect(contentItems()).toHaveLength(1);
   expect(search).toHaveBeenCalledWith('', expect.any(Function));
   picker.value = 'unsaved';
-  await vi.waitFor(() => expect(contentItems()).toHaveLength(1));
+  await vi.waitFor(() => expect(picker.busy).toBe(false));
   expect(contentItems()[0]?.label).toMatch(/^@@/);
   expect(contentItems()[0]?.description).toContain('Unstaged');
   expect(picker.title).toContain('Git Changes · 1 hunks / changes');
@@ -419,7 +419,7 @@ it('searches lines, preserves code-editor previews, and opens a match at its rea
     kind: vscode.QuickPickItemKind.Separator,
     label: 'src/main.cpp · workspace (1)'
   });
-  expect(contentItems()[0]?.description).toBe('src/main.cpp:2 · workspace');
+  expect(contentItems()[0]?.description).toBe('2: const fuzzyNeedle = 1; · workspace');
   expect(picker.activeItems[0]?.id).toBe(contentItems()[0]?.id);
   await vi.waitFor(() => expect(window.activeTextEditor?.selection.start.line).toBe(1));
   picker.accept();
@@ -427,6 +427,50 @@ it('searches lines, preserves code-editor previews, and opens a match at its rea
   expect(window.activeTextEditor?.document.uri.toString()).toBe('file:///workspace/src/main.cpp');
   expect(window.activeTextEditor?.selection.start.line).toBe(1);
 });
+it('keeps previous results visible while loading but rejects stale acceptance', async () => {
+  await contentMode('fuzzyNeedle');
+  await vi.waitFor(() => expect(contentItems()).toHaveLength(2));
+  const previous = picker.items;
+  const stale = picker.activeItems;
+  picker.value = 'otherNeedle';
+  expect(picker.items).toBe(previous);
+  expect(picker.busy).toBe(true);
+  picker.activeItems = stale;
+  const opened = window.showTextDocument.mock.calls.length;
+  await controller.openBeside();
+  expect(window.showTextDocument.mock.calls.length).toBe(opened);
+  await vi.waitFor(() => expect(picker.busy).toBe(false));
+  expect(contentItems()).toHaveLength(1);
+  expect(contentItems()[0]?.description).toContain('otherNeedle');
+});
+
+it('keeps streamed content row layout stable when a second file arrives', async () => {
+  let publish: ((value: ContentUpdate) => void) | undefined;
+  const first = { id: 'first', uri: 'file:///workspace/first.ts', path: 'first.ts', root: 'workspace',
+    location: { line: 0, text: 'needle', matches: [0] } };
+  vi.spyOn(ContentProvider.prototype, 'search').mockImplementation(async (_query, update) => {
+    publish = update;
+    update({ items: [first], total: 1, roots: 1, searchedRoots: 0, complete: false, binary: 0, unsupported: 0 });
+  });
+  await controller.show(false, 'contents', 'needle');
+  const row = contentItems()[0];
+  expect(row?.label).toBe('first.ts');
+  if (!publish) throw new Error('Expected streamed search');
+  publish({ items: [first, { ...first, id: 'second', uri: 'file:///workspace/second.ts', path: 'second.ts' }],
+    total: 2, roots: 1, searchedRoots: 1, complete: true, binary: 0, unsupported: 0 });
+  expect(contentItems()[0]).toBe(row);
+  expect(contentItems()[0]?.description).toBe('1: needle · workspace');
+});
+
+it('reports opt-in search timings without logging query text', async () => {
+  settings.set('telescopePicker.performanceDiagnostics', true);
+  log.mockClear();
+  await controller.show(false, 'contents', 'privateQueryNeedle');
+  const entries = log.mock.calls.map(call => String(call[0]));
+  expect(entries.some(entry => /^Performance: contents, .*ms search\/update, .*ms content row preparation\/dispatch/.test(entry))).toBe(true);
+  expect(entries.join('\n')).not.toContain('privateQueryNeedle');
+});
+
 it('starts a new content query at the first match instead of retaining the old selection and scroll', async () => {
   await contentMode('Needle');
   await vi.waitFor(() => expect(contentItems()).toHaveLength(3));
@@ -436,7 +480,7 @@ it('starts a new content query at the first match instead of retaining the old s
   picker.keepScrollPosition = true;
   picker.value = 'needle';
   expect(picker.keepScrollPosition).toBe(false);
-  await vi.waitFor(() => expect(contentItems()).toHaveLength(3));
+  await vi.waitFor(() => expect(picker.busy).toBe(false));
   expect(picker.activeItems[0]?.id).toBe(contentItems()[0]?.id);
   expect(picker.keepScrollPosition).toBe(false);
 });
@@ -602,7 +646,7 @@ it('groups repeated file matches and skips headings during navigation and accept
     expect(picker.items.filter(item => item.kind === vscode.QuickPickItemKind.Separator)).toHaveLength(2);
     expect(picker.items[0]?.label).toContain('src/main.cpp · workspace (2)');
     expect(contentItems().map(item => item.description)).toEqual([
-      'src/main.cpp:2 · workspace', 'src/main.cpp:3 · workspace', 'src/other.cpp:1 · workspace'
+      '2: const fuzzyNeedle = 1; · workspace', '3: const otherNeedle = 2; · workspace', '1: const fuzzyNeedle = 3; · workspace'
     ]);
     const first = picker.activeItems[0];
     controller.navigate(1);
@@ -715,8 +759,8 @@ it('groups repeated file matches and skips headings during navigation and accept
     expect(contentItems().at(-1)?.id).toBe('match-204');
     expect(picker.items[0]?.label).toContain('main.cpp · root0');
     expect(picker.items[2]?.label).toContain('main.cpp · root1');
-    expect(contentItems()[0]?.description).toBe('main.cpp:1 · root0');
-    expect(contentItems()[1]?.description).toBe('main.cpp:1 · root1');
+    expect(contentItems()[0]?.description).toBe('1: needle · root0');
+    expect(contentItems()[1]?.description).toBe('1: needle · root1');
   });
 
   it('does not interpret icon syntax inside file paths, root names or matching code', async () => {

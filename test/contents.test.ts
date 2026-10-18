@@ -64,6 +64,22 @@ it('searches literal text in the backend, ignores case and does not wait for wor
   expect(workspace.findFiles).not.toHaveBeenCalled();
 });
 
+it('batches growing result snapshots while always publishing the complete uncapped result', async () => {
+  const now = vi.spyOn(Date, 'now').mockReturnValue(10_000);
+  try {
+    for (let index = 0; index < 20; index++) {
+      const uri = await fixture(`batch-${index}.ts`, '');
+      workspace.textDocuments.push(createDocument(vscode.Uri.parse(uri.toString()), true, 'batchNeedle'));
+    }
+    const updates: ContentUpdate[] = [];
+    await provider.search('batchNeedle', update => updates.push(update));
+    expect(updates.filter(update => !update.complete && update.searchedRoots === 0)).toHaveLength(1);
+    expect(updates[0]?.total).toBe(1);
+    expect(updates.at(-1)?.complete).toBe(true);
+    expect(updates.at(-1)?.items).toHaveLength(20);
+  } finally { now.mockRestore(); }
+});
+
 it('preserves regex punctuation, whitespace and Unicode UTF-16 match positions', async () => {
   await fixture('literal.ts', '\u{1F600} [A].*  [a].* \n  \n-needle\n');
   const result = await search(' [a].* ');

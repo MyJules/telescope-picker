@@ -47,6 +47,9 @@ export class EditorPreview {
   select(id: string, location?: MatchLocation, diff?: DiffTarget): void {
     if (this.mode !== 'active') return;
     this.suspend();
+    const configuration = vscode.workspace.getConfiguration('telescopePicker');
+    if (!configuration.get<boolean>('automaticPreview', true)) return;
+    const delay = configuration.get<number>('previewDelay', 120);
     const generation = this.generation;
     this.timer = setTimeout(() => {
       this.timer = undefined;
@@ -86,7 +89,7 @@ export class EditorPreview {
       }, false).catch(reason => {
         if (this.current(generation) && !(reason instanceof vscode.CancellationError)) this.onError(reason);
       });
-    }, 35);
+    }, delay);
   }
 
   suspend(): void {
