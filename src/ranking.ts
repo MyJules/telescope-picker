@@ -37,7 +37,7 @@ function keyMatches(result: KeysResult<IndexedFile>): [Result, Result] {
   return [name, path];
 }
 
-export function rankFiles(files: readonly IndexedFile[], query: string): {
+export function rankFiles(files: readonly IndexedFile[], query: string, includeMatches = true): {
   items: ResultItem[]; total: number;
 } {
   const needle = query.trim();
@@ -61,6 +61,7 @@ export function rankFiles(files: readonly IndexedFile[], query: string): {
   return {
     items: ordered.map(result => {
       const file = result.obj;
+      if (!includeMatches) return { id: file.id, path: file.path, root: file.root, matches: [] };
       const [name, path] = keyMatches(result);
       const useName = name.score >= path.score && name.score > 0;
       const match = useName ? name : path;

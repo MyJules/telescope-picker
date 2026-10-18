@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import { FileProvider } from './files';
 import { LatestRequest } from './latest';
 import { EditorPreview, PreviewTooLargeError } from './editorPreview';
-import { createContentMatcher, rankFiles } from './ranking';
+import { createContentMatcher } from './ranking';
+import { FileRanking } from './fileRanking';
 import { ContentProvider, type ContentUpdate } from './contents';
 import { GitChangesProvider } from './gitChanges';
 import type { ContentMatch, DiffTarget, MatchLocation } from './types';
@@ -35,6 +36,7 @@ export class PickerController implements vscode.Disposable {
   private readonly files = new FileProvider();
   private readonly contents: ContentProvider;
   private readonly gitChanges = new GitChangesProvider();
+  private readonly fileRanking = new FileRanking();
   private resume: ResumeState;
   private finishing: Promise<void> = Promise.resolve();
   private accepting: Promise<void> | undefined;
@@ -71,10 +73,13 @@ export class PickerController implements vscode.Disposable {
       iconPath: new vscode.ThemeIcon('split-horizontal'), tooltip: 'Open beside (Ctrl/Cmd+Enter)'
     };
     let closed = false;
+    let notifyClosed: (() => void) | undefined;
+    const whenClosed = new Promise<void>(resolve => { notifyClosed = resolve; });
     let accepted = false;
     let opening = false;
     let visible = new Map<string, FileItem>();
     let contentRows = new WeakMap<ContentMatch, FileItem>();
+    const fileRows = new Map<string, FileItem>();
     let debounce: ReturnType<typeof setTimeout> | undefined;
     let previewedId: string | undefined;
     let pendingSelection: string | undefined;
@@ -159,6 +164,8 @@ export class PickerController implements vscode.Disposable {
       });
       const unchanged = items.length === picker.items.length && items.every((item, index) => item === picker.items[index]);
       const current = picker.activeItems[0]?.id;
+      const retainNativeSelection = current && visible.has(current)
+        && picker.items.find(item => item.id)?.id === items.find(item => item.id)?.id;
       visible = new Map(items.flatMap(item => item.id ? [[item.id, item] as const] : []));
       if (!items.length) status(empty);
       else {
@@ -172,8 +179,10 @@ export class PickerController implements vscode.Disposable {
           resetScroll = false;
           if (state.mode !== 'files' && !selectionTouched && !pendingSelection) {
             if (!unchanged) {
-              awaitingNativeSelection = true;
-              picker.activeItems = [];
+              if (!retainNativeSelection) {
+                awaitingNativeSelection = true;
+                picker.activeItems = [];
+              }
               picker.items = items;
             }
             return;
@@ -239,6 +248,7 @@ export class PickerController implements vscode.Disposable {
       clearTimeout(debounce);
       this.contents.cancel();
       this.gitChanges.cancel();
+      this.fileRanking.cancel();
       state.query = query;
       pendingSelection = state.selectedId;
       const generation = requests.next();
@@ -303,11 +313,19 @@ export class PickerController implements vscode.Disposable {
         }
         const indexed = await this.files.getFiles();
         if (closed || !requests.isCurrent(generation)) return;
-        const ranked = rankFiles(indexed.files, query);
-        const items: FileItem[] = ranked.items.map(file => ({
-          id: file.id, uri: file.id, path: file.path, label: literalLabel(file.path), description: literalLabel(file.root),
-          resourceUri: vscode.Uri.parse(file.id), iconPath: vscode.ThemeIcon.File, alwaysShow: true, buttons: [splitButton]
-        }));
+        const ranked = await this.fileRanking.rank(indexed.files, query);
+        if (closed || !requests.isCurrent(generation)) return;
+        const items: FileItem[] = ranked.items.map(file => {
+          const description = literalLabel(file.root);
+          const cached = fileRows.get(file.id);
+          if (cached?.path === file.path && cached.description === description) return cached;
+          const item: FileItem = {
+            id: file.id, uri: file.id, path: file.path, label: literalLabel(file.path), description,
+            resourceUri: vscode.Uri.parse(file.id), iconPath: vscode.ThemeIcon.File, alwaysShow: true, buttons: [splitButton]
+          };
+          fileRows.set(file.id, item);
+          return item;
+        });
         title(`Telescope Picker · ${ranked.total} results`
           + (indexed.truncated ? ' · Index limited to 100,000 files' : ''));
         display(items, query.trim() ? 'No matching files.' : 'No workspace files found.');
@@ -336,11 +354,18 @@ export class PickerController implements vscode.Disposable {
       }
       clearTimeout(debounce);
       requests.cancel();
+      this.fileRanking.cancel();
       this.contents.cancel();
       this.gitChanges.cancel();
       preview.suspend();
       previewedId = undefined;
-      if (state.mode === 'files') { void search(query); return; }
+      if (state.mode === 'files') {
+        state.query = query;
+        picker.busy = true;
+        loading('Searching workspace files...');
+        debounce = setTimeout(() => { void search(query); }, 50);
+        return;
+      }
       state.query = query;
       loading(state.mode === 'gitDiffs' ? 'Loading Git changes...' : query.length ? 'Searching file contents...' : state.mode === 'currentFile'
           ? 'Type text to search in the current file.' : 'Type text to search inside workspace files.');
@@ -363,13 +388,15 @@ export class PickerController implements vscode.Disposable {
       resetScroll = true;
       picker.keepScrollPosition = false;
       configure();
-      await search(picker.value);
+      await Promise.race([search(picker.value), whenClosed]);
     };
     const close = (restoreFocus: boolean): void => {
       if (closed) return;
       closed = true;
+      notifyClosed?.();
       this.session = undefined;
       requests.cancel();
+      this.fileRanking.cancel();
       clearTimeout(debounce);
       this.contents.cancel();
       this.gitChanges.cancel();
@@ -396,6 +423,7 @@ export class PickerController implements vscode.Disposable {
       if (!item?.id || visible.get(item.id) !== item) return;
       opening = true;
       requests.cancel();
+      this.fileRanking.cancel();
       clearTimeout(debounce);
       this.contents.cancel();
       this.gitChanges.cancel();
@@ -464,7 +492,7 @@ export class PickerController implements vscode.Disposable {
     try {
       await vscode.commands.executeCommand('setContext', 'telescopePicker.active', true);
       if (closed) return;
-      await searchReady;
+      await Promise.race([searchReady, whenClosed]);
       if (!closed) picker.show();
     } catch (reason) {
       if (!closed) {
@@ -495,6 +523,7 @@ export class PickerController implements vscode.Disposable {
     this.session?.close(false);
     this.contents.dispose();
     this.gitChanges.dispose();
+    this.fileRanking.dispose();
     this.files.dispose();
   }
 }

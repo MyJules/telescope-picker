@@ -4,6 +4,7 @@ import { PickerController } from '../src/controller';
 import { ContentProvider, type ContentUpdate } from '../src/contents';
 import { createContentMatcher } from '../src/ranking';
 import { GitChangesProvider } from '../src/gitChanges';
+import { FileRanking } from '../src/fileRanking';
 import { commands, configurationChanged, createDocument, documentChanged, fileCreated, MockQuickPick, resetEditors, settings, window, workspace, Uri } from './vscode';
 
 class State implements vscode.Memento {
@@ -21,6 +22,7 @@ let original: vscode.TextEditor;
 const log = vi.fn();
 const contentItems = () => picker.items.filter(item => item.id);
 const waitResults = async (): Promise<void> => {
+  await vi.waitFor(() => expect(picker.busy).toBe(false));
   await vi.waitFor(() => expect(picker.items[0]?.id).toBe('file:///workspace/src/main.cpp'));
 };
 
@@ -355,6 +357,19 @@ it('only opens items from the current result set', async () => {
   await controller.openBeside();
   expect(window.showTextDocument).not.toHaveBeenCalled();
 });
+it('coalesces rapid filename input before ranking and reuses matching file rows', async () => {
+  const originalRow = picker.items.find(item => item.id === 'file:///workspace/src/main.cpp');
+  const ranking = vi.spyOn(FileRanking.prototype, 'rank');
+  picker.value = 'm';
+  picker.value = 'ma';
+  picker.value = 'main';
+  expect(ranking).not.toHaveBeenCalled();
+  await waitResults();
+  expect(ranking).toHaveBeenCalledTimes(1);
+  expect(ranking.mock.calls[0]?.[1]).toBe('main');
+  expect(picker.items[0]).toBe(originalRow);
+});
+
 it('drops stale query results and preserves newer input during invalidation', async () => {
   picker.value = 'obsolete';
   picker.value = 'main';
@@ -460,6 +475,75 @@ it('keeps streamed content row layout stable when a second file arrives', async 
     total: 2, roots: 1, searchedRoots: 1, complete: true, binary: 0, unsupported: 0 });
   expect(contentItems()[0]).toBe(row);
   expect(contentItems()[0]?.description).toBe('1: needle · workspace');
+});
+
+it('previews and accepts streamed matches while the search is still running', async () => {
+  settings.set('telescopePicker.previewDelay', 0);
+  let finish: (() => void) | undefined;
+  let publish: ((value: ContentUpdate) => void) | undefined;
+  const first = {
+    id: 'first.ts', uri: 'file:///workspace/first.ts', path: 'first.ts', root: 'workspace',
+    location: { line: 0, text: 'const unsaved = 1;', matches: [6] }
+  };
+  const items = ['first.ts', 'second.ts'].map(path => ({
+    ...first, id: path, uri: `file:///workspace/${path}`, path
+  }));
+  const result = { items, total: 2, roots: 1, searchedRoots: 0, complete: false, binary: 0, unsupported: 0 };
+  vi.mocked(ContentProvider.prototype.search).mockImplementation(async (_query, update) => {
+    publish = update;
+    update(result);
+    await new Promise<void>(done => { finish = done; });
+  });
+  const searching = controller.show(false, 'contents', 'unsaved');
+  try {
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    await vi.waitFor(() => expect(contentItems()).toHaveLength(2));
+    expect(picker.busy).toBe(true);
+    const active = picker.activeItems;
+    if (!publish) throw new Error('Expected content stream');
+    publish({ ...result, items: [...items, { ...first, id: 'third.ts', uri: 'file:///workspace/third.ts', path: 'third.ts' }],
+      total: 3 });
+    expect(picker.activeItems).toBe(active);
+    controller.navigate(1);
+    await vi.waitFor(() => expect(window.activeTextEditor?.document.uri.toString()).toBe(items[1]?.uri));
+    expect(picker.busy).toBe(true);
+    await controller.openBeside();
+    expect(picker.dispose).toHaveBeenCalled();
+    expect(window.activeTextEditor?.viewColumn).toBe(2);
+  } finally {
+    finish?.();
+    await searching;
+  }
+});
+
+it('cancels on Escape and reopens without waiting for the closed content search to finish', async () => {
+  let finish: (() => void) | undefined;
+  let publish: ((value: ContentUpdate) => void) | undefined;
+  vi.mocked(ContentProvider.prototype.search).mockImplementation(async (_query, update) => {
+    publish = update;
+    await new Promise<void>(done => { finish = done; });
+  });
+  const cancel = vi.spyOn(ContentProvider.prototype, 'cancel');
+  const searching = controller.show(false, 'contents', 'needle');
+  try {
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    const closedPicker = picker;
+    const calls = cancel.mock.calls.length;
+    picker.hide();
+    expect(cancel.mock.calls.length).toBeGreaterThan(calls);
+    await searching;
+    await controller.show();
+    picker = window.createQuickPick.mock.results.at(-1)?.value ?? new MockQuickPick();
+    expect(picker).not.toBe(closedPicker);
+    await waitResults();
+    const rows = picker.items;
+    if (!publish) throw new Error('Expected closed search callback');
+    publish({ items: [], total: 0, roots: 1, searchedRoots: 1, complete: true, binary: 0, unsupported: 0 });
+    expect(picker.items).toBe(rows);
+  } finally {
+    finish?.();
+    await searching;
+  }
 });
 
 it('reports opt-in search timings without logging query text', async () => {

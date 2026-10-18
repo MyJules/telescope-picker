@@ -2,6 +2,7 @@ import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import { FileProvider } from '../../src/files';
 import { EditorPreview } from '../../src/editorPreview';
+import { FileRanking } from '../../src/fileRanking';
 import { GitChangesProvider, type GitAPI } from '../../src/gitChanges';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -37,6 +38,15 @@ export async function run(): Promise<void> {
     const extension = vscode.extensions.getExtension('jules.jules-telescope-picker');
     assert.ok(extension);
     await extension.activate();
+    const ranking = new FileRanking(join(extension.extensionPath, 'dist', 'fileRankingWorker.js'));
+    try {
+      const files = Array.from({ length: 100_000 }, (_, index) => ({
+        id: `file:///ranking/file-${index}.ts`, path: `file-${index}.ts`, name: `file-${index}.ts`, root: 'ranking'
+      }));
+      assert.equal((await ranking.rank(files, '')).items.length, 100_000, 'Packaged worker returns every indexed file');
+      assert.equal((await ranking.rank(files, 'file-99999')).items[0]?.id, 'file:///ranking/file-99999.ts',
+        'Packaged worker reuses its index for warm queries');
+    } finally { ranking.dispose(); }
     const ordered = await vscode.workspace.openTextDocument({
       content: 'export function lineOrderNeedle() {}\n// gap\nlineOrderNeedle\nconst lineOrderNeedle = 1;',
       language: 'typescript'

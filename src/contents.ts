@@ -251,6 +251,7 @@ export class ContentProvider implements vscode.Disposable {
     const subscription = token.onCancellationRequested(() => child.kill());
     const decoder = new TextDecoder('utf-8', { fatal: true });
     let pending = Buffer.alloc(0);
+    let yieldAt = performance.now() + 8;
     try {
       if (token.isCancellationRequested) throw new vscode.CancellationError();
       for await (const chunk of child.stdout) {
@@ -263,6 +264,11 @@ export class ContentProvider implements vscode.Disposable {
           if (token.isCancellationRequested) throw new vscode.CancellationError();
           await receive(decoder.decode(pending.subarray(start, end)));
           start = end + 1;
+          if (performance.now() >= yieldAt) {
+            await new Promise<void>(done => setTimeout(done, 0));
+            if (token.isCancellationRequested) throw new vscode.CancellationError();
+            yieldAt = performance.now() + 8;
+          }
         }
         pending = pending.subarray(start);
       }

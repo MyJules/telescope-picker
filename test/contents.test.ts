@@ -1,6 +1,8 @@
 import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { ChildProcess, spawn } from 'node:child_process';
+import { PassThrough } from 'node:stream';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { ContentProvider, type ContentUpdate } from '../src/contents';
@@ -9,6 +11,11 @@ import {
   configurationChanged, createDocument, documentChanged, fileChanged, fileCreated,
   resetEditors, settings, Uri, workspace
 } from './vscode';
+
+vi.mock('node:child_process', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return { ...actual, spawn: vi.fn(actual.spawn) };
+});
 
 let directory: string;
 let files: FileProvider;
@@ -273,4 +280,41 @@ it('terminates the query-specific backend when a search is cancelled', async () 
     provider.cancel();
   })).rejects.toBeInstanceOf(vscode.CancellationError);
   expect(updates).toHaveLength(1);
+});
+
+it('yields buffered backend output to Escape cancellation and permits another search immediately', async () => {
+  const child = new ChildProcess();
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  Object.defineProperties(child, { stdout: { value: stdout }, stderr: { value: stderr } });
+  const kill = vi.spyOn(child, 'kill').mockImplementation(() => {
+    stdout.destroy();
+    child.emit('close', null);
+    return true;
+  });
+  const messages: string[] = [];
+  const message = (type: string, path: string, data = {}): void => {
+    messages.push(JSON.stringify({ type, data: { path: { text: path }, ...data } }));
+  };
+  for (const [path, count] of [['first.ts', 1], ['large.ts', 20_000]] as const) {
+    message('begin', path);
+    for (let line = 1; line <= count; line++)
+      message('match', path, { line_number: line, lines: { text: 'needle\n' } });
+    message('end', path);
+  }
+  stdout.end(`${messages.join('\n')}\n`);
+  vi.mocked(spawn).mockImplementationOnce(() => child);
+  const updates: ContentUpdate[] = [];
+  let reopening: Promise<ContentUpdate> | undefined;
+  await expect(provider.search('needle', update => {
+    updates.push(update);
+    if (updates.length === 1) setTimeout(() => {
+      provider.cancel();
+      reopening = search('freshNeedle');
+    }, 0);
+  })).rejects.toBeInstanceOf(vscode.CancellationError);
+  expect(updates).toHaveLength(1);
+  expect(kill).toHaveBeenCalled();
+  expect(reopening).toBeDefined();
+  expect(await reopening).toMatchObject({ complete: true, total: 0 });
 });

@@ -9,7 +9,7 @@ the original editor group. There is no bottom preview panel or picker webview.
 
 Requires desktop VS Code 1.108 or newer for native file-icon theme support.
 
-1. Install the platform-matching VSIX (for example `jules-telescope-picker-win32-x64-0.11.7.vsix`)
+1. Install the platform-matching VSIX (for example `jules-telescope-picker-win32-x64-0.11.9.vsix`)
    using **Extensions: Install from VSIX**.
 2. Run **Developer: Reload Window** when updating an already-running version.
 3. Open a folder or multi-root workspace.
@@ -49,6 +49,26 @@ Content searches publish their first available batch immediately, then batch
 growing results at 100 ms intervals (250 ms above 5,000 matches), with final
 results always delivered. Unchanged content rows are reused. All matches remain
 available; no result cap or paging is introduced.
+
+Buffered text-search output yields to the extension event loop at short intervals
+so keyboard commands and preview timers can run during a scan. Current-query
+matches can be navigated, previewed, and opened before the search completes.
+Escape cancels the active backend process and discards its remaining output;
+reopening does not wait for the closed search to finish. Later batches retain the
+active selection when the first result is unchanged.
+
+Filename input is debounced for 50 ms. Indexes of 5,000 files or more are ranked
+in a bundled Node worker thread, keeping fuzzy matching and sorting off the
+extension-host thread. Smaller indexes avoid worker startup overhead.
+The worker receives each immutable file-index snapshot once, transfers compact
+result indexes back, and coalesces pending queries to the latest request.
+Obsolete results cannot update the picker. Filename rows are reused across
+queries, and the worker is terminated when the extension is disposed.
+Worker failures are reported explicitly, never silently retried on the UI thread.
+
+All indexed filename matches are still returned. Very broad/empty queries can
+remain expensive because creating/transferring/rendering tens of thousands of
+native Quick Pick rows is not removed by worker ranking; paging is not enabled.
 
 Automatic previews wait for selection to settle for 120 ms by default. For
 large workspaces or expensive language servers, configure:
@@ -427,6 +447,14 @@ If npm 10.9.2 crashes resolving Vitest optional peers with an `edgesOut` error,
 use `npx --yes npm@11 ci` instead of upgrading global npm.
 
 ### Performance baseline
+
+With worker ranking on a 100,000-file synthetic index on the same Windows
+machine, worker round-trips measured 281 ms cold for `file-99`, then 30 ms warm
+for that query and 15 ms for `file-123`. Broad `group-1` and `file` queries
+took 245 ms and 395 ms; an empty query took 17 ms warm. These are single-run
+observations, not percentile guarantees, and exclude Quick Pick row preparation,
+native rendering, input debounce, and editor previews. Background ranking
+improves extension-host responsiveness rather than eliminating broad-query cost.
 
 The ranking benchmark uses 50,000 synthetic C++ paths over 250 directories and
 100 warm queries. On Windows x64, AMD Ryzen 7 7700X, 63 GiB reported RAM,
