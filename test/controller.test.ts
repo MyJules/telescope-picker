@@ -144,6 +144,21 @@ it('waits for acceptance before opening a new picker so its first request is not
   expect(next.items.filter(item => item.id)).toHaveLength(1);
 });
 
+it('does not restore the original editor when native Quick Pick hides during acceptance', async () => {
+  settings.set('telescopePicker.automaticPreview', false);
+  const show = window.showTextDocument.getMockImplementation();
+  if (!show) throw new Error('Missing editor mock');
+  window.showTextDocument.mockImplementationOnce(async (document, options) => {
+    picker.hide();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    return show(document, options);
+  });
+  await controller.openBeside();
+  expect(window.activeTextEditor?.document.uri.toString()).toBe('file:///workspace/src/main.cpp');
+  expect(window.activeTextEditor?.viewColumn).toBe(2);
+  expect(picker.dispose).toHaveBeenCalledTimes(1);
+});
+
 it('searches only the original current document including unsaved text without a workspace', async () => {
   workspace.workspaceFolders = [];
   const scans = vi.mocked(ContentProvider.prototype.search).mock.calls.length;
@@ -217,7 +232,7 @@ it('shows explicit current-file errors, empty and no-match states', async () => 
   expect(picker.items[0]?.label).toContain('Open a text editor');
 });
 
-it('returns every current-file match and opens the exact line beside', async () => {
+it('pages every current-file match and opens the exact line beside', async () => {
   picker.hide();
   await controller.show();
   picker = window.createQuickPick.mock.results.at(-1)?.value ?? new MockQuickPick();
@@ -230,12 +245,15 @@ it('returns every current-file match and opens the exact line beside', async () 
   settings.set('telescopePicker.exclude', ['**']);
   await controller.show(false, 'currentFile', 'LOCALNEEDLE');
   picker = window.createQuickPick.mock.results.at(-1)?.value ?? new MockQuickPick();
-  await vi.waitFor(() => expect(contentItems()).toHaveLength(305));
+  await vi.waitFor(() => expect(contentItems()).toHaveLength(200));
+  expect(picker.title).toContain('305 matching lines · Page 1/2');
+  picker.clickButton('Next page');
+  expect(contentItems()).toHaveLength(105);
   controller.navigate(1);
   await controller.openBeside();
   expect(window.activeTextEditor?.document).toBe(document);
   expect(window.activeTextEditor?.viewColumn).toBe(2);
-  expect(window.activeTextEditor?.selection.start.line).toBe(1);
+  expect(window.activeTextEditor?.selection.start.line).toBe(201);
 });
 
 it('refreshes current-file text changes only and rejects obsolete local query work', async () => {
@@ -280,16 +298,20 @@ it('uses a native popup without creating or focusing a preview panel', async () 
   expect(picker.items[0]?.iconPath).toBe(vscode.ThemeIcon.File);
   expect(picker.items[0]?.resourceUri?.toString()).toBe('file:///workspace/src/main.cpp');
 });
-it('shows all matching filenames beyond 200, including an empty query', async () => {
+it('pages all matching filenames beyond 200, including an empty query', async () => {
   workspace.findFiles.mockResolvedValue(Array.from({ length: 305 }, (_, index) =>
     Uri.parse(`file:///workspace/File${index}.cpp`)));
   fileCreated.fire();
-  await vi.waitFor(() => expect(picker.items).toHaveLength(305));
-  expect(picker.title).toBe('Telescope Picker · 305 results');
+  await vi.waitFor(() => expect(picker.items).toHaveLength(200));
+  expect(picker.title).toContain('Telescope Picker · 305 results · Page 1/2');
+  const first = picker.items;
+  picker.clickButton('Next page');
+  expect(picker.items).toHaveLength(105);
+  expect(new Set([...first, ...picker.items].map(item => item.id)).size).toBe(305);
   picker.value = 'File';
-  await vi.waitFor(() => expect(picker.items).toHaveLength(305));
-  expect(picker.title).toBe('Telescope Picker · 305 results');
-  expect(new Set(picker.items.map(item => item.id)).size).toBe(305);
+  await vi.waitFor(() => expect(picker.busy).toBe(false));
+  expect(picker.title).toContain('Telescope Picker · 305 results');
+  expect(picker.items.length).toBeLessThanOrEqual(200);
 });
 it('previews in the original editor while preserving popup focus', async () => {
   await vi.waitFor(() => expect(window.showTextDocument).toHaveBeenCalledWith(
@@ -836,15 +858,18 @@ it('groups repeated file matches and skips headings during navigation and accept
     });
     await controller.show(false, 'contents');
     picker.value = 'needle';
-    await vi.waitFor(() => expect(contentItems()).toHaveLength(205));
-    expect(picker.items).toHaveLength(410);
+    await vi.waitFor(() => expect(contentItems()).toHaveLength(200));
+    expect(picker.items).toHaveLength(400);
     expect(picker.title).toContain('205 matching lines');
     expect(picker.title).not.toContain('showing');
-    expect(contentItems().at(-1)?.id).toBe('match-204');
+    expect(contentItems().at(-1)?.id).toBe('match-199');
     expect(picker.items[0]?.label).toContain('main.cpp · root0');
     expect(picker.items[2]?.label).toContain('main.cpp · root1');
     expect(contentItems()[0]?.description).toBe('1: needle · root0');
     expect(contentItems()[1]?.description).toBe('1: needle · root1');
+    picker.clickButton('Next page');
+    expect(contentItems()).toHaveLength(5);
+    expect(contentItems().at(-1)?.id).toBe('match-204');
   });
 
   it('does not interpret icon syntax inside file paths, root names or matching code', async () => {

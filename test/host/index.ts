@@ -31,6 +31,10 @@ function assertNoPickerTabs(): void {
 }
 
 export async function run(): Promise<void> {
+  if (process.env.TELESCOPE_BENCHMARK_ROOT) {
+    await checkLargeProject();
+    return;
+  }
   const configuration = vscode.workspace.getConfiguration('workbench');
   const previous = configuration.get<string | null>('iconTheme');
   try {
@@ -92,6 +96,78 @@ export async function run(): Promise<void> {
     await vscode.commands.executeCommand('telescopePicker.configureShortcuts');
   } finally {
     await configuration.update('iconTheme', previous, vscode.ConfigurationTarget.Global);
+  }
+}
+
+async function checkLargeProject(): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  const extension = vscode.extensions.getExtension('jules.jules-telescope-picker');
+  assert.ok(folder && extension);
+  await extension.activate();
+  const provider = new FileProvider();
+  const configuration = vscode.workspace.getConfiguration('telescopePicker');
+  const previous = configuration.get<boolean>('automaticPreview');
+  let maxGap = 0;
+  let phase = 'configuration';
+  let slowestPhase = phase;
+  let tick = performance.now();
+  const timer = setInterval(() => {
+    const now = performance.now();
+    if (now - tick > maxGap) { maxGap = now - tick; slowestPhase = phase; }
+    tick = now;
+  }, 10);
+  try {
+    await configuration.update('automaticPreview', true, vscode.ConfigurationTarget.Global);
+    phase = 'discovery';
+    const discoveryStart = performance.now();
+    const indexed = await provider.getFiles();
+    const discoveryMs = performance.now() - discoveryStart;
+    assert.ok(indexed.files.length > 1000, 'Benchmark uses the actual large-project file index');
+    phase = 'original editor';
+    const original = await vscode.window.showTextDocument(vscode.Uri.joinPath(folder.uri, 'README.md'), { preview: false });
+    phase = 'content search';
+    const contentStart = performance.now();
+    const searching = vscode.commands.executeCommand('telescopePicker.searchContents', 'e');
+    const atMatch = (): boolean => {
+      const editor = vscode.window.activeTextEditor;
+      return !!editor && editor.document !== original.document
+        && editor.document.lineAt(editor.selection.start.line).text[editor.selection.start.character]?.toLowerCase() === 'e';
+    };
+    await until(atMatch, 'Broad real-project search previews a streamed matching line');
+    const firstPreviewMs = performance.now() - contentStart;
+    const selected = vscode.window.activeTextEditor?.document.uri.toString();
+    phase = 'acceptance';
+    const openStart = performance.now();
+    await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+    await until(() => vscode.window.activeTextEditor?.document.uri.toString() === selected
+      && activeTab(vscode.ViewColumn.One)?.isPreview === false && atMatch(),
+    'A streamed real-project match opens and stays pinned at its exact location');
+    await searching;
+    const openMs = performance.now() - openStart;
+    phase = 'original editor';
+    await vscode.window.showTextDocument(original.document, { preview: false });
+    phase = 'content search';
+    const nextSearch = vscode.commands.executeCommand('telescopePicker.searchContents', 'e');
+    await until(atMatch, 'A replacement broad search starts without blocking the popup');
+    const switchStart = performance.now();
+    phase = 'filename search';
+    await vscode.commands.executeCommand('telescopePicker.files');
+    const switchMs = performance.now() - switchStart;
+    await nextSearch;
+    await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+    console.log(JSON.stringify({
+      scope: 'Native VS Code, real file discovery, bundled search/ranking workers and editor activation',
+      files: indexed.files.length, discoveryMs, firstPreviewMs, openMs, switchMs, maxEventLoopGapMs: maxGap, slowestPhase
+    }));
+    assert.ok(maxGap < 150, `Extension-host heartbeat gap: ${maxGap.toFixed(1)} ms`);
+    assert.ok(firstPreviewMs < 2000, `First native preview: ${firstPreviewMs.toFixed(1)} ms`);
+    assert.ok(openMs < 1000, `Native match acceptance: ${openMs.toFixed(1)} ms`);
+    assert.ok(switchMs < 2000, `Switch to actual filename search: ${switchMs.toFixed(1)} ms`);
+  } finally {
+    clearInterval(timer);
+    provider.dispose();
+    await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+    await configuration.update('automaticPreview', previous, vscode.ConfigurationTarget.Global);
   }
 }
 

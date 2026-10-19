@@ -41,6 +41,7 @@ async function verifyArchive(path, target) {
   if (binaries.length !== 1 || binaries[0] !== expected
     || !entries.includes('extension/node_modules/@vscode/ripgrep/lib/index.js')
     || !entries.includes('extension/dist/fileRankingWorker.js')
+    || !entries.includes('extension/dist/contentStoreWorker.js')
     || !entries.includes('extension/dist/extension.js') || !entries.includes('extension/media/icon.png'))
     throw new Error(`VSIX runtime contents are incorrect for ${target}`);
   await writeFile(path, zip);
@@ -90,6 +91,7 @@ try {
     await mkdir(join(stage, 'dist'));
     await cp(resolve('dist', 'extension.js'), join(stage, 'dist', 'extension.js'));
     await cp(resolve('dist', 'fileRankingWorker.js'), join(stage, 'dist', 'fileRankingWorker.js'));
+    await cp(resolve('dist', 'contentStoreWorker.js'), join(stage, 'dist', 'contentStoreWorker.js'));
     const { scripts, devDependencies, ...runtime } = manifest;
     await writeFile(join(stage, 'package.json'), JSON.stringify({
       ...runtime, dependencies: { '@vscode/ripgrep': loader.version }

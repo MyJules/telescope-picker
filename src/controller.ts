@@ -20,6 +20,8 @@ interface Session {
   setMode(mode: PickerMode, query?: string): Promise<void>;
 }
 
+const PAGE_SIZE = 200;
+
 function savedState(value: unknown): ResumeState {
   if (typeof value !== 'object' || value === null) return { query: '', mode: 'files' };
   const query = 'query' in value && typeof value.query === 'string' ? value.query.slice(0, 1024) : '';
@@ -68,6 +70,7 @@ export class PickerController implements vscode.Disposable {
     const originalDocumentUri = previous?.document.uri.toString();
     if (state.mode === 'currentFile' && !resume) state.documentUri = originalDocumentUri;
     const requests = new LatestRequest();
+    const pageRequests = new LatestRequest();
     const subscriptions: vscode.Disposable[] = [];
     const splitButton: vscode.QuickInputButton = {
       iconPath: new vscode.ThemeIcon('split-horizontal'), tooltip: 'Open beside (Ctrl/Cmd+Enter)'
@@ -90,6 +93,10 @@ export class PickerController implements vscode.Disposable {
     let resultTitle = 'Telescope Picker';
     let previewError: string | undefined;
     let renderMilliseconds = 0;
+    let page = 0;
+    let resultCount = 0;
+    let renderPage: (() => void) | undefined;
+    let searchGeneration = 0;
     const title = (value: string): void => {
       resultTitle = value;
       const next = previewError ?? value;
@@ -102,16 +109,49 @@ export class PickerController implements vscode.Disposable {
     const gitButton: vscode.QuickInputButton = {
       iconPath: new vscode.ThemeIcon('git-compare'), tooltip: 'Browse Git changes'
     };
+    const previousPageButton: vscode.QuickInputButton = {
+      iconPath: new vscode.ThemeIcon('chevron-left'), tooltip: 'Previous page'
+    };
+    const nextPageButton: vscode.QuickInputButton = {
+      iconPath: new vscode.ThemeIcon('chevron-right'), tooltip: 'Next page'
+    };
+    let modeButtons: vscode.QuickInputButton[] = [];
+    const updateButtons = (): void => {
+      const buttons = [...modeButtons,
+        ...(page > 0 ? [previousPageButton] : []),
+        ...((page + 1) * PAGE_SIZE < resultCount ? [nextPageButton] : [])];
+      const previous = picker.buttons;
+      if (buttons.length !== previous.length || buttons.some((button, index) => button !== previous[index]))
+        picker.buttons = buttons;
+    };
+    const pageItems = <T extends { id: string }>(items: {
+      readonly length: number;
+      slice(start: number, end: number): readonly T[];
+      findIndex(predicate: (item: T) => boolean): number;
+    }): readonly T[] => {
+      const selectedId = pendingSelection ?? (selectionTouched ? state.selectedId : undefined);
+      if (selectedId) {
+        const index = items.findIndex(item => item.id === selectedId);
+        if (index >= 0) page = Math.floor(index / PAGE_SIZE);
+      }
+      page = Math.min(page, Math.max(0, Math.ceil(items.length / PAGE_SIZE) - 1));
+      resultCount = items.length;
+      updateButtons();
+      return items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+    };
+    const pageTitle = (): string => resultCount > PAGE_SIZE
+      ? ` · Page ${page + 1}/${Math.ceil(resultCount / PAGE_SIZE)} · ${PAGE_SIZE} per page` : '';
     const modeLabel = (): string => state.mode === 'files' ? 'Files'
       : state.mode === 'currentFile' ? 'Current File' : state.mode === 'gitDiffs' ? 'Git Changes' : 'File Contents';
     const configure = (): void => {
       picker.placeholder = `${state.mode === 'files' ? 'Fuzzy file names'
         : state.mode === 'currentFile' ? 'Search current file (ignore case)' : state.mode === 'gitDiffs'
           ? 'All Git hunks · Type to filter (optional)' : 'Search text within files (ignore case)'} · Enter Open · Ctrl/Cmd+Enter Split · Esc Close`;
-      picker.buttons = [{
+      modeButtons = [{
         iconPath: new vscode.ThemeIcon(state.mode === 'files' ? 'search' : 'files'),
         tooltip: state.mode === 'files' ? 'Search file contents' : 'Find files'
       }, currentFileButton, gitButton];
+      updateButtons();
     };
     configure();
     picker.ignoreFocusOut = true;
@@ -134,11 +174,18 @@ export class PickerController implements vscode.Disposable {
       }
     });
     const status = (message: string): void => {
+      renderPage = undefined;
+      page = 0;
+      resultCount = 0;
+      updateButtons();
       visible.clear();
       picker.items = [{ label: message, alwaysShow: true }];
       picker.activeItems = [];
     };
     const loading = (message: string): void => {
+      renderPage = undefined;
+      resultCount = 0;
+      updateButtons();
       visible.clear();
       if (!picker.items.some(item => item.id)) status(message);
     };
@@ -155,17 +202,18 @@ export class PickerController implements vscode.Disposable {
       preview.select(item.uri ?? item.id, item.location, item.diff);
     };
     const display = (items: FileItem[], empty: string): void => {
+      const previousItems = picker.items;
       items = items.map((item, index) => {
-        const previous = item.id ? visible.get(item.id) : picker.items[index];
+        const previous = item.id ? visible.get(item.id) : previousItems[index];
         return previous && previous.id === item.id && previous.label === item.label
           && previous.description === item.description && previous.uri === item.uri
           && previous.location?.text === item.location?.text
           && JSON.stringify(previous.diff) === JSON.stringify(item.diff) ? previous : item;
       });
-      const unchanged = items.length === picker.items.length && items.every((item, index) => item === picker.items[index]);
+      const unchanged = items.length === previousItems.length && items.every((item, index) => item === previousItems[index]);
       const current = picker.activeItems[0]?.id;
       const retainNativeSelection = current && visible.has(current)
-        && picker.items.find(item => item.id)?.id === items.find(item => item.id)?.id;
+        && previousItems.find(item => item.id)?.id === items.find(item => item.id)?.id;
       visible = new Map(items.flatMap(item => item.id ? [[item.id, item] as const] : []));
       if (!items.length) status(empty);
       else {
@@ -195,8 +243,40 @@ export class PickerController implements vscode.Disposable {
     };
     const contentResults = (result: ContentUpdate): void => {
       const renderStarted = performance.now();
+      if (result.page) {
+        page = Math.floor(result.page.offset / PAGE_SIZE);
+        resultCount = result.page.length;
+        updateButtons();
+      }
+      renderPage = () => {
+        if (!result.page) { contentResults(result); return; }
+        const generation = searchGeneration;
+        const request = pageRequests.next();
+        void result.page.load(page * PAGE_SIZE).then(value => {
+          if (!closed && !opening && requests.isCurrent(generation) && pageRequests.isCurrent(request))
+            contentResults(value);
+        }, reason => {
+          if (!closed && !opening && requests.isCurrent(generation) && pageRequests.isCurrent(request)
+            && !(reason instanceof vscode.CancellationError)) {
+            report(reason);
+            title('Could not load result page · See Output');
+          }
+        });
+      };
+      let ordered = result.items;
+      if (state.mode === 'gitDiffs') {
+        const groups = new Map<string, ContentMatch[]>();
+        for (const match of result.items) {
+          const key = JSON.stringify([match.path, match.root]);
+          const group = groups.get(key);
+          if (group) group.push(match);
+          else groups.set(key, [match]);
+        }
+        ordered = [...groups.values()].flatMap(matches => matches.sort((a, b) =>
+          (a.diff?.modifiedLine ?? a.location.line) - (b.diff?.modifiedLine ?? b.location.line)));
+      }
       const groups = new Map<string, ContentMatch[]>();
-      for (const match of result.items) {
+      for (const match of result.page ? result.items : pageItems(ordered)) {
         const key = JSON.stringify([match.diff ? match.path : match.uri, match.root]);
         const group = groups.get(key);
         if (group) group.push(match);
@@ -233,6 +313,7 @@ export class PickerController implements vscode.Disposable {
         }
       }
       title(`Telescope Picker · ${modeLabel()} · ${result.total} ${state.mode === 'gitDiffs' ? 'hunks / changes' : 'matching lines'}`
+        + pageTitle()
         + (state.mode === 'gitDiffs' ? ' · Saved Git changes' : '')
         + (result.complete ? ' · Search complete' : ` · Searching roots ${result.searchedRoots}/${result.roots}`)
         + (result.binary ? ` · ${result.binary} binary files${state.mode === 'gitDiffs' ? '' : ' skipped'}` : '')
@@ -252,6 +333,8 @@ export class PickerController implements vscode.Disposable {
       state.query = query;
       pendingSelection = state.selectedId;
       const generation = requests.next();
+      searchGeneration = generation;
+      pageRequests.cancel();
       preview.suspend();
       previewedId = undefined;
       previewError = undefined;
@@ -308,27 +391,32 @@ export class PickerController implements vscode.Disposable {
           }
           await this.contents.search(query, result => {
             if (!closed && requests.isCurrent(generation)) contentResults(result);
-          });
+          }, { size: PAGE_SIZE, selectedId: () => pendingSelection ?? (selectionTouched ? state.selectedId : undefined) });
           return;
         }
         const indexed = await this.files.getFiles();
         if (closed || !requests.isCurrent(generation)) return;
         const ranked = await this.fileRanking.rank(indexed.files, query);
         if (closed || !requests.isCurrent(generation)) return;
-        const items: FileItem[] = ranked.items.map(file => {
-          const description = literalLabel(file.root);
-          const cached = fileRows.get(file.id);
-          if (cached?.path === file.path && cached.description === description) return cached;
-          const item: FileItem = {
-            id: file.id, uri: file.id, path: file.path, label: literalLabel(file.path), description,
-            resourceUri: vscode.Uri.parse(file.id), iconPath: vscode.ThemeIcon.File, alwaysShow: true, buttons: [splitButton]
-          };
-          fileRows.set(file.id, item);
-          return item;
-        });
-        title(`Telescope Picker · ${ranked.total} results`
-          + (indexed.truncated ? ' · Index limited to 100,000 files' : ''));
-        display(items, query.trim() ? 'No matching files.' : 'No workspace files found.');
+        const showFiles = (): void => {
+          renderPage = showFiles;
+          const items: FileItem[] = pageItems(ranked.items).map(file => {
+            const description = literalLabel(file.root);
+            const cached = fileRows.get(file.id);
+            if (cached?.path === file.path && cached.description === description) return cached;
+            const item: FileItem = {
+              id: file.id, uri: file.id, path: file.path, label: literalLabel(file.path), description,
+              resourceUri: vscode.Uri.parse(file.id), iconPath: vscode.ThemeIcon.File, alwaysShow: true, buttons: [splitButton]
+            };
+            fileRows.set(file.id, item);
+            return item;
+          });
+          title(`Telescope Picker · ${ranked.total} results`
+            + pageTitle()
+            + (indexed.truncated ? ' · Index limited to 100,000 files' : ''));
+          display(items, query.trim() ? 'No matching files.' : 'No workspace files found.');
+        };
+        showFiles();
       } catch (reason) {
         if (!closed && requests.isCurrent(generation) && !(reason instanceof vscode.CancellationError)) {
           status(`Error: ${report(reason)}`);
@@ -345,6 +433,7 @@ export class PickerController implements vscode.Disposable {
     };
     const schedule = (query: string): void => {
       if (closed || opening) return;
+      if (query !== state.query) page = 0;
       if (state.mode !== 'files' && query !== state.query) {
         state.selectedId = undefined;
         selectionTouched = false;
@@ -354,6 +443,7 @@ export class PickerController implements vscode.Disposable {
       }
       clearTimeout(debounce);
       requests.cancel();
+      pageRequests.cancel();
       this.fileRanking.cancel();
       this.contents.cancel();
       this.gitChanges.cancel();
@@ -377,6 +467,7 @@ export class PickerController implements vscode.Disposable {
       if (closed || opening || next === state.mode && (query === undefined || query === picker.value)) return;
       if (next === 'currentFile' && next !== state.mode) state.documentUri = originalDocumentUri;
       state.mode = next;
+      page = 0;
       if (query !== undefined) {
         state.query = query;
         picker.value = query;
@@ -471,12 +562,27 @@ export class PickerController implements vscode.Disposable {
       picker.onDidAccept(() => { void accept(false); }),
       picker.onDidTriggerItemButton(event => { void accept(true, event.item); }),
       picker.onDidTriggerButton(button => {
+        if (button === previousPageButton || button === nextPageButton) {
+          if (closed || opening || !renderPage) return;
+          const next = page + (button === nextPageButton ? 1 : -1);
+          if (next < 0 || next * PAGE_SIZE >= resultCount) return;
+          page = next;
+          pendingSelection = undefined;
+          state.selectedId = undefined;
+          selectionTouched = false;
+          resetScroll = true;
+          preview.suspend();
+          previewedId = undefined;
+          visible.clear();
+          renderPage();
+          return;
+        }
         void setMode(button === currentFileButton ? 'currentFile' : button === gitButton ? 'gitDiffs'
           : state.mode === 'files' ? 'contents' : 'files');
       }),
       picker.onDidHide(() => {
         this.output.appendLine(`Picker hidden: ${state.mode}`);
-        close(true);
+        if (!opening) close(true);
       }),
       this.files.onDidChange(() => { if (state.mode === 'files') schedule(picker.value); }),
       this.contents.onDidChange(() => { if (state.mode === 'contents') schedule(picker.value); }),

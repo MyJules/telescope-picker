@@ -196,6 +196,11 @@ export class MockQuickPick {
     const button = this.buttons[0];
     if (button) this.button.fire(button);
   }
+  clickButton(tooltip: string): void {
+    const button = this.buttons.find(button => button.tooltip === tooltip);
+    if (!button) throw new Error(`Missing picker button: ${tooltip}`);
+    this.button.fire(button);
+  }
 }
 export const window = {
   activeTextEditor: undefined as TextEditor | undefined,

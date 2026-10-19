@@ -12,7 +12,7 @@ await runTests({
   ],
   extensionTestsPath: path.join(root, 'dist', 'test', 'host.js'),
   launchArgs: [
-    path.join(root, 'test', 'fixtures', 'picker.code-workspace'),
+    process.env.TELESCOPE_BENCHMARK_ROOT ?? path.join(root, 'test', 'fixtures', 'picker.code-workspace'),
     '--disable-extensions', '--skip-welcome', '--skip-release-notes',
     '--user-data-dir', path.join(root, '.vscode-test', 'user-data'),
     '--extensions-dir', path.join(root, '.vscode-test', 'extensions')

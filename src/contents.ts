@@ -2,31 +2,25 @@ import { spawn } from 'node:child_process';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import * as vscode from 'vscode';
 import type { FileProvider } from './files';
-import { compareContentMatches, createContentMatcher, type IndexedFile } from './ranking';
+import { compareContentMatches, type IndexedFile } from './ranking';
 import { excluded, searchScopes, type SearchScope } from './searchScope';
 import type { ContentMatch } from './types';
+import { ContentStore, type StoredPage } from './contentStore';
+import { ContentParser, type FileMatches } from './contentParser';
 
 export interface ContentUpdate {
   items: readonly ContentMatch[];
+  page?: {
+    offset: number;
+    length: number;
+    load(offset: number): Promise<ContentUpdate>;
+  };
   total: number;
   searchedRoots: number;
   roots: number;
   binary: number;
   unsupported: number;
   complete: boolean;
-}
-
-interface FileMatches {
-  file: IndexedFile;
-  items: ContentMatch[];
-  total: number;
-  invalidEncoding: boolean;
-  extraLines: number;
-  skip: boolean;
-}
-
-function record(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
 
 function pathKey(path: string): string {
@@ -36,6 +30,7 @@ function pathKey(path: string): string {
 
 export class ContentProvider implements vscode.Disposable {
   private cancellation: vscode.CancellationTokenSource | undefined;
+  private store: ContentStore | undefined;
   private readonly changed = new vscode.EventEmitter<void>();
   private readonly subscriptions: vscode.Disposable[];
   private readonly eligibility = new Map<string, boolean>();
@@ -64,16 +59,23 @@ export class ContentProvider implements vscode.Disposable {
     this.cancellation?.cancel();
     this.cancellation?.dispose();
     this.cancellation = undefined;
+    this.store?.dispose();
+    this.store = undefined;
   }
 
-  async search(query: string, update: (value: ContentUpdate) => void): Promise<void> {
+  async search(query: string, update: (value: ContentUpdate) => void, paging?: {
+    size: number;
+    selectedId(): string | undefined;
+  }): Promise<void> {
     this.cancel();
     const cancellation = new vscode.CancellationTokenSource();
     this.cancellation = cancellation;
     const token = cancellation.token;
+    const store = paging ? new ContentStore() : undefined;
+    this.store = store;
     const check = (): void => { if (token.isCancellationRequested) throw new vscode.CancellationError(); };
     try {
-      const matchLine = createContentMatcher(query);
+      const parser = new ContentParser(query);
       const scopes = searchScopes();
       const executable = scopes.some(scope => scope.folder.uri.scheme === 'file') ? await this.backend() : '';
       check();
@@ -85,26 +87,44 @@ export class ContentProvider implements vscode.Disposable {
       const handled = new Set<string>();
       const dirty = new Set<string>();
       let lastUpdate = 0;
-      const publish = (force = false): void => {
+      let offset = 0;
+      const storedUpdate = async (requested: number): Promise<ContentUpdate> => {
+        if (!store || !paging) throw new Error('Paged content storage is unavailable.');
+        const page: StoredPage = await store.page(requested, paging.size, paging.selectedId());
         check();
-        if (force || unsorted && (lastUpdate === 0 || Date.now() - lastUpdate >= (found.length > 5000 ? 250 : 100))) {
+        offset = page.offset;
+        return {
+          ...state, items: page.items,
+          page: { offset: page.offset, length: page.length, load: storedUpdate }
+        };
+      };
+      const publish = async (force = false): Promise<void> => {
+        check();
+        if (force || unsorted && (lastUpdate === 0 || Date.now() - lastUpdate >= (state.total > 5000 ? 250 : 100))) {
           lastUpdate = Date.now();
-          if (unsorted) { found.sort(compareContentMatches); unsorted = false; }
-          update({ ...state, items: [...found] });
+          if (store) {
+            unsorted = false;
+            update(await storedUpdate(offset));
+            return;
+          }
+          if (unsorted) {
+            found.sort(compareContentMatches);
+            state.items = [...found];
+            unsorted = false;
+          }
+          update({ ...state });
         }
       };
-      const collect = (matches: FileMatches, line: number, text: string): void => {
-        const match = matchLine(matches.file, line, text);
-        if (match) { matches.total++; matches.items.push(match); }
-      };
-      const commit = (matches: FileMatches): void => {
+      const commit = async (matches: FileMatches): Promise<void> => {
         if (matches.invalidEncoding) {
           state.unsupported++;
           this.log(`Text search skipped matches with unsupported encoding: ${matches.file.id}`);
         } else {
           state.total += matches.total;
-          for (const item of matches.items) found.push(item);
-          if (matches.items.length) unsorted = true;
+          if (matches.items.length) {
+            for (const item of matches.items) found.push(item);
+            unsorted = true;
+          }
         }
       };
       for (const scope of scopes) {
@@ -117,18 +137,27 @@ export class ContentProvider implements vscode.Disposable {
           check();
           const matches = this.fileMatches(document.uri, scope);
           const version = document.version;
-          for (let line = 0; line < document.lineCount; line++) {
-            if (line % 512 === 0) {
-              await new Promise<void>(done => setTimeout(done, 0));
-              check();
-              if (document.isClosed || document.version !== version)
-                throw new Error('A document changed during text search. Type again to refresh results.');
+          for (let start = 0; start < document.lineCount; start += 512) {
+            await new Promise<void>(done => setTimeout(done, 0));
+            check();
+            if (document.isClosed || document.version !== version)
+              throw new Error('A document changed during text search. Type again to refresh results.');
+            const end = Math.min(start + 512, document.lineCount);
+            if (store) {
+              const lines = Array.from({ length: end - start }, (_, index) => document.lineAt(start + index).text);
+              const complete = end === document.lineCount;
+              const total = await store.document(query, matches.file, start, lines, complete);
+              if (complete) {
+                state.total += total;
+                if (total) unsorted = true;
+              }
+            } else {
+              for (let line = start; line < end; line++) parser.collect(matches, line, document.lineAt(line).text);
             }
-            collect(matches, line, document.lineAt(line).text);
           }
           dirty.add(matches.file.id);
-          commit(matches);
-          publish();
+          if (!store) await commit(matches);
+          await publish();
         }
       }
       for (const scope of scopes) {
@@ -137,60 +166,65 @@ export class ContentProvider implements vscode.Disposable {
           state.unsupported++;
           this.log(`Text search can only search open documents in non-filesystem workspace: ${scope.folder.uri.toString()}`);
         } else {
-          const active = new Map<string, FileMatches>();
           await this.run(executable, [
             '--json', '--line-buffered', '--no-config', '--fixed-strings', '--ignore-case', '--crlf',
             '--color', 'never', ...scope.args, '--regexp', query, '--', '.'
-          ], scope, token, 10, async text => {
-            const message: unknown = JSON.parse(text);
-            if (!record(message) || typeof message.type !== 'string') throw new Error('Invalid text-search response.');
-            if (message.type !== 'match' && message.type !== 'end' && message.type !== 'begin') return;
-            const data = message.data;
-            if (!record(data) || !record(data.path) || typeof data.path.text !== 'string')
-              throw new Error('Text search returned an unsupported filename encoding.');
-            const uri = this.resultUri(scope, data.path.text);
-            const id = uri.toString();
-            if (message.type === 'begin') {
-              const owner = scopes.find(candidate => candidate.folder.uri.toString()
-                === vscode.workspace.getWorkspaceFolder(uri)?.uri.toString()) ?? scope;
-              const matches = this.fileMatches(uri, owner);
-              matches.skip = handled.has(id) || dirty.has(id) || await excluded(uri, owner);
-              active.set(id, matches);
+          ], scope, token, 10, async lines => {
+            if (store) {
+              for (const result of await store.parse(query, lines)) {
+                check();
+                const uri = this.resultUri(scope, result.path);
+                const id = uri.toString();
+                const owner = scopes.find(candidate => candidate.folder.uri.toString()
+                  === vscode.workspace.getWorkspaceFolder(uri)?.uri.toString()) ?? scope;
+                const skip = handled.has(id) || dirty.has(id) || await excluded(uri, owner);
+                let file: IndexedFile | undefined;
+                if (!skip) {
+                  handled.add(id);
+                  if (result.binary) state.binary++;
+                  else if (result.invalidEncoding) {
+                    state.unsupported++;
+                    this.log(`Text search skipped matches with unsupported encoding: ${id}`);
+                  } else {
+                    file = this.fileMatches(uri, owner).file;
+                    state.total += result.total;
+                    if (result.total) unsorted = true;
+                  }
+                }
+                await store.commit(result.path, file);
+              }
+              await publish();
               return;
             }
-            const matches = active.get(id);
-            if (!matches) throw new Error('Text search returned a file outside its search sequence.');
-            if (message.type === 'match' && !matches.skip) {
-              if (!record(data.lines) || typeof data.line_number !== 'number'
-                || !Number.isSafeInteger(data.line_number) || data.line_number < 1)
-                throw new Error('Invalid text-search line response.');
-              if (typeof data.lines.text !== 'string') {
-                if (typeof data.lines.bytes !== 'string') throw new Error('Invalid text-search text response.');
-                matches.invalidEncoding = true;
-              } else {
-                const startLine = data.line_number - 1;
-                let lineText = data.lines.text.replace(/\r?\n$/, '');
-                if (startLine === 0) lineText = lineText.replace(/^\uFEFF/, '');
-                const lines = lineText.split('\r');
-                lines.forEach((line, offset) => collect(matches, startLine + matches.extraLines + offset, line));
-                matches.extraLines += lines.length - 1;
-              }
-            } else if (message.type === 'end') {
-              if (!matches.skip) {
+            for (const text of lines) {
+              const event = parser.parse(text);
+              if (!event) continue;
+              const uri = this.resultUri(scope, event.path);
+              const id = uri.toString();
+              const matches = event.matches;
+              if (event.type === 'begin') {
+                const owner = scopes.find(candidate => candidate.folder.uri.toString()
+                  === vscode.workspace.getWorkspaceFolder(uri)?.uri.toString()) ?? scope;
+                matches.file = this.fileMatches(uri, owner).file;
+                matches.skip = handled.has(id) || dirty.has(id) || await excluded(uri, owner);
+              } else if (!matches.skip) {
                 handled.add(id);
-                if (data.binary_offset !== null && data.binary_offset !== undefined) state.binary++;
-                else commit(matches);
+                if (event.binary) state.binary++;
+                else await commit(matches);
               }
-              active.delete(id);
             }
-            publish();
-          });
+            await publish();
+          }, store ? 128 : 1);
         }
         state.searchedRoots++;
-        publish(true);
+        await publish(true);
       }
       state.complete = true;
-      publish(true);
+      await publish(true);
+    } catch (reason) {
+      store?.dispose();
+      if (this.store === store) this.store = undefined;
+      throw reason;
     } finally {
       if (this.cancellation === cancellation) {
         this.cancellation = undefined;
@@ -227,9 +261,11 @@ export class ContentProvider implements vscode.Disposable {
       const found = new Set<string>();
       // Cache only live-document eligibility; never enumerate the workspace through findFiles per query.
       await this.run(executable, ['--files', '--null', '--no-config', ...scope.args, '--', '.'],
-        scope, token, 0, path => {
-          const id = wanted.get(pathKey(this.resultUri(scope, path).fsPath));
-          if (id) found.add(id);
+        scope, token, 0, paths => {
+          for (const path of paths) {
+            const id = wanted.get(pathKey(this.resultUri(scope, path).fsPath));
+            if (id) found.add(id);
+          }
         });
       if (token.isCancellationRequested) throw new vscode.CancellationError();
       for (const document of unknown) this.eligibility.set(document.uri.toString(), found.has(document.uri.toString()));
@@ -239,7 +275,7 @@ export class ContentProvider implements vscode.Disposable {
 
   private async run(
     executable: string, args: readonly string[], scope: SearchScope, token: vscode.CancellationToken,
-    delimiter: number, receive: (text: string) => void | Promise<void>
+    delimiter: number, receive: (texts: readonly string[]) => void | Promise<void>, batchSize = 1
   ): Promise<void> {
     const child = spawn(executable, args, { cwd: scope.folder.uri.fsPath, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let stderr = '';
@@ -250,19 +286,27 @@ export class ContentProvider implements vscode.Disposable {
     });
     const subscription = token.onCancellationRequested(() => child.kill());
     const decoder = new TextDecoder('utf-8', { fatal: true });
-    let pending = Buffer.alloc(0);
+    const fragments: Buffer[] = [];
+    let batch: string[] = [];
     let yieldAt = performance.now() + 8;
     try {
       if (token.isCancellationRequested) throw new vscode.CancellationError();
       for await (const chunk of child.stdout) {
         if (token.isCancellationRequested) throw new vscode.CancellationError();
         if (!Buffer.isBuffer(chunk)) throw new Error('Invalid text-search stream.');
-        pending = Buffer.concat([pending, chunk]);
         let start = 0;
         let end: number;
-        while ((end = pending.indexOf(delimiter, start)) >= 0) {
+        while ((end = chunk.indexOf(delimiter, start)) >= 0) {
           if (token.isCancellationRequested) throw new vscode.CancellationError();
-          await receive(decoder.decode(pending.subarray(start, end)));
+          const part = chunk.subarray(start, end);
+          if (fragments.length) fragments.push(part);
+          const response = fragments.length ? Buffer.concat(fragments) : part;
+          fragments.length = 0;
+          batch.push(decoder.decode(response));
+          if (batch.length >= batchSize) {
+            await receive(batch);
+            batch = [];
+          }
           start = end + 1;
           if (performance.now() >= yieldAt) {
             await new Promise<void>(done => setTimeout(done, 0));
@@ -270,14 +314,15 @@ export class ContentProvider implements vscode.Disposable {
             yieldAt = performance.now() + 8;
           }
         }
-        pending = pending.subarray(start);
+        if (start < chunk.length) fragments.push(chunk.subarray(start));
+        if (batch.length) { await receive(batch); batch = []; }
       }
       const result = await ended;
       if (token.isCancellationRequested) throw new vscode.CancellationError();
       if (result.error) throw result.error;
       if (result.code !== 0 && result.code !== 1)
         throw new Error(`Text search failed (${result.code}): ${stderr.trim() || 'Backend terminated unexpectedly.'}`);
-      if (pending.length) throw new Error('Text search returned an incomplete response.');
+      if (fragments.length) throw new Error('Text search returned an incomplete response.');
     } finally {
       subscription.dispose();
       if (child.exitCode === null && child.signalCode === null) child.kill();

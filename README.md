@@ -45,10 +45,18 @@ indicator, but cannot be opened or previewed until replaced by current results.
 Empty intermediate batches do not clear the list. Completed empty searches and
 errors still replace it with an explicit status.
 
-Content searches publish their first available batch immediately, then batch
-growing results at 100 ms intervals (250 ms above 5,000 matches), with final
-results always delivered. Unchanged content rows are reused. All matches remain
-available; no result cap or paging is introduced.
+All picker modes show **200 results per page**. Use the **Previous page** and
+**Next page** arrow buttons in the popup toolbar; the title shows the page number
+and total match count. Headings do not count toward the page size. Every match
+remains accessible, including while a content search is running. Changing the
+query resets paging, and Resume Picker locates the page containing your selection.
+
+Content searches publish their first available batch immediately, then refresh
+at 100 ms intervals (250 ms above 5,000 matches), with final results always
+delivered. A bundled worker parses backend JSON, matches live documents, stores
+the full result set, and prepares pages away from the extension host. Only the
+visible page crosses back into the popup. This also keeps very long matching
+lines and large backend records from blocking keyboard commands.
 
 Buffered text-search output yields to the extension event loop at short intervals
 so keyboard commands and preview timers can run during a scan. Current-query
@@ -66,9 +74,10 @@ Obsolete results cannot update the picker. Filename rows are reused across
 queries, and the worker is terminated when the extension is disposed.
 Worker failures are reported explicitly, never silently retried on the UI thread.
 
-All indexed filename matches are still returned. Very broad/empty queries can
-remain expensive because creating/transferring/rendering tens of thousands of
-native Quick Pick rows is not removed by worker ranking; paging is not enabled.
+All indexed filename matches are still ranked, but only the current page is
+turned into native Quick Pick rows. Mode switching and closing cancel obsolete
+searches and release their content workers; completed content searches retain
+their worker only until the picker closes or another search starts.
 
 Automatic previews wait for selection to settle for 120 ms by default. For
 large workspaces or expensive language servers, configure:
@@ -237,7 +246,8 @@ returns focus to the editor group. Other existing editor tabs are not closed.
 State is saved per workspace on close or acceptance. Opening an already-open
 picker reuses it. Native Quick Pick supplies accessibility, matching highlights,
 themes, fonts, and final result ordering. Fuzzysort pre-ranks filename results;
-text results include all matching lines; the native popup applies its query ranking.
+text results include all matching lines across pages; the native popup applies
+its query ranking within the visible page.
 Remap shortcuts if another extension conflicts.
 
 ## File icons and grouped results
@@ -290,9 +300,10 @@ removed when changing selection/query or closing/accepting the picker.
 - The query is passed directly to **explicitly packaged ripgrep**, which searches
   workspace directories and streams **only matching lines**, rather than sending
   every line to the extension host. No `workspace.findFiles` discovery is needed
-  before text search. There is no total content-byte/line/file cap; the popup
-  retains and displays all matching lines. Very broad queries use more memory
-  and can take longer to render, filter, and update than narrower queries.
+  before text search. There is no total content-byte/line/file cap. All matching
+  lines remain in the search worker and the popup displays one page at a time.
+  Very broad queries still use more memory and take longer to finish scanning
+  than narrower queries, without rendering the entire result set at once.
 - Dirty documents use their live, decoded contents instead of stale disk matches.
   Their ignore-file eligibility is cached and refreshed on filesystem/settings
   changes. This does not invoke VS Code's bundled executable,
@@ -333,10 +344,10 @@ removed when changing selection/query or closing/accepting the picker.
 - Root descriptions distinguish duplicate filenames. Equal root names include
   their URI, and overlapping roots are deduplicated by URI. The cached index is
   invalidated on file creation/deletion, root changes, or `files.exclude` changes.
-- The **filename** index is capped at 100,000 unique paths, but the popup receives
-  every matching indexed file, including all indexed files for an empty query.
-  There is no 200-result limit in either mode. The title discloses the index limit
-  if reached. Broad queries can cost more memory and rendering time.
+- The **filename** index is capped at 100,000 unique paths. Every matching indexed
+  file remains accessible across pages, including all indexed files for an empty
+  query. The title discloses the index limit if reached. Broad queries can still
+  cost more memory and ranking time.
   Queries over 1,024 characters show an explicit error.
 - Loading, no matches, discovery errors, preview errors, and opening failures are
   explicit. Details are logged in **Output: Telescope Picker**. Status rows do
@@ -432,7 +443,9 @@ ignore/exclude/sibling rules, overlapping roots, live text, progress,
 invalidation, mode switching, resume, match highlights, and exact-line opening.
 Icon/group tests verify native resource URIs and theme-icon references in both
 modes, heading isolation, multi-root groups, keyboard navigation, escaped labels,
-and complete result rendering beyond 200 matches independently of headings.
+and complete result access across pages independently of headings. Worker tests
+cover real backend parsing, long split UTF-8 records, dirty text, encoding,
+ignore rules, page ordering, cancellation, and explicit worker failures.
 Extension-host tests run on VS Code **1.108.0** against an isolated two-root
 workspace and exercise actual preview switching, dirty contents, original
 selections/scroll restoration, temporary-tab cleanup, Enter pinning, resume,
@@ -447,6 +460,36 @@ If npm 10.9.2 crashes resolving Vitest optional peers with an `edgesOut` error,
 use `npx --yes npm@11 ci` instead of upgrading global npm.
 
 ### Performance baseline
+
+To repeat the read-only large-project search checks after building:
+
+```powershell
+$env:TELESCOPE_BENCHMARK_ROOT = 'E:\MY\Modules\opencode'
+node .\node_modules\vitest\vitest.mjs run test\largeProject.test.ts --reporter=verbose
+npm run test:host
+Remove-Item Env:\TELESCOPE_BENCHMARK_ROOT
+```
+
+On that project, an observed Windows x64 / Node 22.16 run found **88,688**
+matching lines for `const` in **1.34 s**, and **871,030** for `e` in **11.11 s**.
+Maximum extension-side heartbeat gaps were **29 ms** and **57 ms**, respectively.
+The interaction check received its first page in **73 ms**; opening a streamed
+selection and switching to filename search did not wait for scan completion.
+The test requires heartbeat gaps below 150 ms, a first page within 1 s, and
+opening/mode switching below 250 ms. It uses the real backend and bundled result
+worker with a mocked VS Code UI: these are not native rendering, file-discovery,
+or real editor-activation timings. With that environment variable set,
+`npm run test:host` also checks actual discovery, streamed previews, pinned
+exact-line acceptance, and switching from a running scan to filename search in
+the specified project without writing project files. Without the variable it
+runs the standard isolated regression workspace.
+
+A separate native VS Code 1.108 run on the same project discovered **8,562**
+files in **184 ms**, showed the first streamed editor preview in **398 ms**,
+pinned the selected match in **56 ms**, and switched an active content scan to
+filename search in **231 ms**. Its maximum extension-host heartbeat gap was
+**85 ms**. These are single-run observations, not guarantees; first-launch editor
+and language-service initialization can add delays outside the search pipeline.
 
 With worker ranking on a 100,000-file synthetic index on the same Windows
 machine, worker round-trips measured 281 ms cold for `file-99`, then 30 ms warm
@@ -465,8 +508,8 @@ and are not an unlimited-result performance measurement.
 With unlimited filename results on the same machine, a 100-query run over
 50,000 paths measured approximately **59 ms p50 / 178 ms p95** (Node 22.16.0).
 This exceeds the 50 ms target, so the benchmark currently exits unsuccessfully
-for unlimited results. Popup rendering and IPC add further cost; all results
-are returned rather than silently restoring a cap.
+for unlimited ranking results. Popup rendering now uses pages; the ranking
+benchmark still returns all results rather than silently restoring a cap.
 Immutable fuzzysort snapshots avoid per-candidate custom scoring costs.
 
 The literal-content regression test uses a 34 MiB UTF-8 file, over 100,000

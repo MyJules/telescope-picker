@@ -1,6 +1,7 @@
 import * as esbuild from 'esbuild';
 
 const builds = [
+  { entryPoints: ['src/contentStoreWorker.ts'], outfile: 'dist/contentStoreWorker.js', platform: 'node', format: 'cjs' },
   { entryPoints: ['src/fileRankingWorker.ts'], outfile: 'dist/fileRankingWorker.js', platform: 'node', format: 'cjs' },
   { entryPoints: ['src/extension.ts'], outfile: 'dist/extension.js', platform: 'node', format: 'cjs', external: ['vscode', '@vscode/ripgrep'] },
   { entryPoints: ['test/host/index.ts'], outfile: 'dist/test/host.js', platform: 'node', format: 'cjs', external: ['vscode', '@vscode/ripgrep'] }
