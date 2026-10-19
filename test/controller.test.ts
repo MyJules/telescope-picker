@@ -499,6 +499,72 @@ it('keeps streamed content row layout stable when a second file arrives', async 
   expect(contentItems()[0]?.description).toBe('1: needle · workspace');
 });
 
+it('keeps deep paths out of content labels while exposing the exact path on split-button hover', async () => {
+  const path = `${'very-long-directory/'.repeat(15)}processor.ts`;
+  const uri = `file:///workspace/${path}`;
+  vi.spyOn(ContentProvider.prototype, 'search').mockImplementation(async (_query, update) => {
+    update({
+      items: [{ id: 'deep-match', uri, path, root: 'workspace',
+        location: { line: 0, text: 'const unsaved = 1;', matches: [6] } }],
+      total: 1, roots: 1, searchedRoots: 1, complete: true, binary: 0, unsupported: 0
+    });
+  });
+  await controller.show(false, 'contents', 'unsaved');
+  const row = contentItems()[0];
+  expect(row?.label).toBe('processor.ts');
+  expect(row?.description).toBe('1: const unsaved = 1; · workspace');
+  expect(picker.items[0]?.label).toBe(`...${path.slice(-69)} · workspace (1)`);
+  expect(row?.buttons?.[0]?.tooltip).toBe(`${path} · workspace\nOpen beside (Ctrl/Cmd+Enter)`);
+  expect(row?.resourceUri?.toString()).toBe(uri);
+  if (!row) throw new Error('Expected deep-path match');
+  picker.split(row);
+  await vi.waitFor(() => expect(picker.dispose).toHaveBeenCalled());
+  expect(window.activeTextEditor?.document.uri.toString()).toBe(uri);
+});
+
+it('distinguishes duplicate filenames in compact file rows without losing full paths', async () => {
+  settings.set('telescopePicker.automaticPreview', false);
+  const folder = 'very-long-directory/'.repeat(15);
+  const paths = [`${folder}first/processor.ts`, `${folder}second/processor.ts`];
+  workspace.findFiles.mockResolvedValue(paths.map(path => Uri.parse(`file:///workspace/${path}`)));
+  fileCreated.fire();
+  await vi.waitFor(() => expect(picker.busy).toBe(false));
+  await vi.waitFor(() => expect(picker.items[0]?.label).toBe('processor.ts'));
+  expect(picker.items.map(item => item.label)).toEqual(['processor.ts', 'processor.ts']);
+  expect(picker.items[0]?.description).toContain('first · workspace');
+  expect(picker.items[1]?.description).toContain('second · workspace');
+  for (const [index, row] of picker.items.entries()) {
+    expect(Array.from(row.description ?? '').length).toBeLessThanOrEqual(72);
+    expect(row.buttons?.[0]?.tooltip).toContain(paths[index]);
+    expect(row.id).toBe(`file:///workspace/${paths[index]}`);
+  }
+});
+
+it('bounds unusually long filenames and roots without splitting Unicode characters or changing grouping', async () => {
+  const name = `${'\u{1F600}'.repeat(60)}.ts`;
+  const root = 'long-workspace-name-'.repeat(10);
+  const paths = [`first/${name}`, `second/${name}`];
+  vi.spyOn(ContentProvider.prototype, 'search').mockImplementation(async (_query, update) => {
+    update({
+      items: paths.map(path => ({
+        id: path, uri: `file:///workspace/${path}`, path, root,
+        location: { line: 0, text: 'needle', matches: [0] }
+      })),
+      total: 2, roots: 1, searchedRoots: 1, complete: true, binary: 0, unsupported: 0
+    });
+  });
+  await controller.show(false, 'contents', 'needle');
+  const rows = contentItems();
+  expect(rows).toHaveLength(2);
+  expect(picker.items.filter(item => item.kind === vscode.QuickPickItemKind.Separator)).toHaveLength(2);
+  for (const [index, row] of rows.entries()) {
+    expect(Array.from(row.label)).toHaveLength(48);
+    expect(row.label).toBe(`...${'\u{1F600}'.repeat(42)}.ts`);
+    expect(row.description).toBe(`1: needle · ...${root.slice(-29)}`);
+    expect(row.buttons?.[0]?.tooltip).toContain(`${paths[index]} · ${root}`);
+  }
+});
+
 it('previews and accepts streamed matches while the search is still running', async () => {
   settings.set('telescopePicker.previewDelay', 0);
   let finish: (() => void) | undefined;

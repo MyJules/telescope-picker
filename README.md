@@ -34,7 +34,7 @@ chat and other documents do not. An open text editor is required.
 Current-file matches follow ascending source line order, not relevance ranking.
 Each row uses the same file label with its line number and code excerpt alongside
 it, preventing native Quick Pick label ranking from reordering the matches.
-Search File Contents uses file-path labels with line numbers and code alongside
+Search File Contents uses filename labels with line numbers and code alongside
 them for both single- and multi-file results. Matches within each file follow
 line order, and streamed results never switch between different row layouts.
 
@@ -260,10 +260,14 @@ a cached copy of the `workbench.iconTheme` setting. No theme definitions are
 parsed, icons/fonts copied, or theme settings changed by the extension.
 
 Content matches are grouped by file URI under **non-selectable file headings**
-showing the relative path, workspace root, and visible match count.
-Matching rows show the active theme's file icon and code excerpt, with
-`relative/path:line · workspace root` beside each match, so its source remains
-visible even when the file heading has scrolled out of view.
+showing a compact relative path, workspace root, and visible match count.
+Matching rows show the active theme's file icon and filename, with line numbers
+and code excerpts alongside. Long headings retain the end of the path with a
+leading `...`; unusually long filenames are also shortened. Find Files uses
+filename labels with compact directory/root descriptions. Hover a row's split
+button to see its complete, unshortened relative path and workspace root;
+clicking it still opens that exact file beside. Paths used for searching,
+grouping, selection, and opening are never shortened.
 Changing the content query resets selection and scrolling to the first match.
 Later batches of the same search preserve your navigation and scroll position;
 Resume Picker still restores the previous selection.

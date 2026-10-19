@@ -33,6 +33,13 @@ function savedState(value: unknown): ResumeState {
 
 function literalLabel(text: string): string { return text.replace(/\$\(/g, '\\$('); }
 
+function compactPath(path: string, limit = 72): string {
+  const characters = Array.from(path);
+  return characters.length <= limit ? path : `...${characters.slice(-(limit - 3)).join('')}`;
+}
+
+function filename(path: string): string { return path.slice(path.lastIndexOf('/') + 1); }
+
 export class PickerController implements vscode.Disposable {
   private session: Session | undefined;
   private readonly files = new FileProvider();
@@ -75,6 +82,9 @@ export class PickerController implements vscode.Disposable {
     const splitButton: vscode.QuickInputButton = {
       iconPath: new vscode.ThemeIcon('split-horizontal'), tooltip: 'Open beside (Ctrl/Cmd+Enter)'
     };
+    const pathButton = (path: string, root: string): vscode.QuickInputButton => ({
+      iconPath: splitButton.iconPath, tooltip: `${path} · ${root}\n${splitButton.tooltip}`
+    });
     let closed = false;
     let notifyClosed: (() => void) | undefined;
     const whenClosed = new Promise<void>(resolve => { notifyClosed = resolve; });
@@ -207,6 +217,7 @@ export class PickerController implements vscode.Disposable {
         const previous = item.id ? visible.get(item.id) : previousItems[index];
         return previous && previous.id === item.id && previous.label === item.label
           && previous.description === item.description && previous.uri === item.uri
+          && previous.buttons?.[0]?.tooltip === item.buttons?.[0]?.tooltip
           && previous.location?.text === item.location?.text
           && JSON.stringify(previous.diff) === JSON.stringify(item.diff) ? previous : item;
       });
@@ -289,7 +300,7 @@ export class PickerController implements vscode.Disposable {
         if (!first) continue;
         items.push({
           kind: vscode.QuickPickItemKind.Separator,
-          label: `${literalLabel(first.path)} · ${literalLabel(first.root)} (${matches.length})`
+          label: `${literalLabel(compactPath(first.path))} · ${literalLabel(compactPath(first.root, 32))} (${matches.length})`
         });
         for (const match of matches.sort((a, b) =>
           (a.diff?.modifiedLine ?? a.location.line) - (b.diff?.modifiedLine ?? b.location.line))) {
@@ -301,12 +312,12 @@ export class PickerController implements vscode.Disposable {
           const item: FileItem = {
             id: match.id, uri: match.uri, path: match.path, location: match.location, diff: match.diff,
             resourceUri: vscode.Uri.parse(match.uri), iconPath: vscode.ThemeIcon.File,
-            label: lineOrdered ? literalLabel(first.path) : literalLabel(match.diff?.hunk
+            label: lineOrdered ? literalLabel(compactPath(filename(first.path), 48)) : literalLabel(match.diff?.hunk
               ?? `${match.diff ? match.diff.side === 'added' ? '+ ' : '- ' : ''}${start ? '...' : ''}${excerpt || '(whitespace)'}${start + 400 < text.length ? '...' : ''}`),
             description: lineOrdered
-              ? `${match.location.line + 1}: ${literalLabel(`${start ? '...' : ''}${excerpt || '(whitespace)'}${start + 400 < text.length ? '...' : ''}`)}${state.mode === 'contents' ? ` · ${literalLabel(match.root)}` : ''}`
-              : `${literalLabel(match.path)}${match.diff?.metadataOnly ? '' : `:${match.location.line + 1}`} · ${literalLabel(match.root)}`,
-            alwaysShow: true, buttons: [splitButton]
+              ? `${match.location.line + 1}: ${literalLabel(`${start ? '...' : ''}${excerpt || '(whitespace)'}${start + 400 < text.length ? '...' : ''}`)}${state.mode === 'contents' ? ` · ${literalLabel(compactPath(match.root, 32))}` : ''}`
+              : `${literalLabel(compactPath(match.path))}${match.diff?.metadataOnly ? '' : `:${match.location.line + 1}`} · ${literalLabel(compactPath(match.root, 32))}`,
+            alwaysShow: true, buttons: [pathButton(match.path, match.root)]
           };
           contentRows.set(match, item);
           items.push(item);
@@ -401,12 +412,15 @@ export class PickerController implements vscode.Disposable {
         const showFiles = (): void => {
           renderPage = showFiles;
           const items: FileItem[] = pageItems(ranked.items).map(file => {
-            const description = literalLabel(file.root);
+            const slash = file.path.lastIndexOf('/');
+            const folder = slash >= 0 ? file.path.slice(0, slash) : '';
+            const description = literalLabel(compactPath(`${folder ? `${folder} · ` : ''}${file.root}`));
             const cached = fileRows.get(file.id);
             if (cached?.path === file.path && cached.description === description) return cached;
             const item: FileItem = {
-              id: file.id, uri: file.id, path: file.path, label: literalLabel(file.path), description,
-              resourceUri: vscode.Uri.parse(file.id), iconPath: vscode.ThemeIcon.File, alwaysShow: true, buttons: [splitButton]
+              id: file.id, uri: file.id, path: file.path, label: literalLabel(compactPath(filename(file.path), 48)), description,
+              resourceUri: vscode.Uri.parse(file.id), iconPath: vscode.ThemeIcon.File, alwaysShow: true,
+              buttons: [pathButton(file.path, file.root)]
             };
             fileRows.set(file.id, item);
             return item;
